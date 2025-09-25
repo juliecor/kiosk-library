@@ -1,0 +1,269 @@
+/* LandingPage.css */
+.landing-page {
+  min-height: 100vh;
+  width: 100vw;
+  /* Replace this with your library background image if needed */
+  background-image: url('/path-to-your-library-background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  background-color: #f0f9ff;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Dark overlay for better text readability */
+.landing-page::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 1;
+}
+
+.bg-decoration {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.2;
+}
+
+.bg-decoration-1 {
+  top: 80px;
+  left: 40px;
+  width: 128px;
+  height: 128px;
+  background-color: #bfdbfe;
+  animation: pulse 2s infinite;
+}
+
+.bg-decoration-2 {
+  bottom: 80px;
+  right: 40px;
+  width: 96px;
+  height: 96px;
+  background-color: #e9d5ff;
+  animation: pulse 2s infinite;
+  animation-delay: 1s;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.3; }
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 24px;
+  position: relative;
+  z-index: 20;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.main-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 48px;
+  min-height: 80vh;
+  width: 100%;
+}
+
+.left-section, .right-section {
+  flex: 1;
+  position: relative;
+}
+
+/* Logo container for overlapping circle */
+.card-logo-container {
+  position: absolute;
+  top: -80px;
+  left: -80px;
+  z-index: 30;
+}
+
+.card-logo-circle {
+  width: 200px;
+  height: 200px;
+  background: linear-gradient(135deg, #2563eb, #3730a3);
+  border-radius: 50%;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(12deg);
+  transition: transform 0.5s ease;
+  border: 4px solid rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+}
+
+.card-logo-circle:hover {
+  transform: rotate(6deg) scale(1.05);
+}
+
+.school-logo-image {
+  width: 90%;
+  height: 90%;
+  object-fit: contain;
+  border-radius: 50%;
+  transform: rotate(-12deg);
+  transition: transform 0.5s ease;
+}
+
+.card-logo-circle:hover .school-logo-image {
+  transform: rotate(-6deg);
+  filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.button-icon { font-size: 1.5rem; }
+.rules-icon { font-size: 2rem; margin-right: 4px; }
+.rule-icon { font-size: 1.25rem; margin-top: 2px; }
+
+.content-card {
+  border-radius: 24px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  padding: 32px;
+  padding-left: 80px;
+  padding-top: 60px;
+  margin-left: 60px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  position: relative;
+}
+
+/* Transparent version for library background */
+.transparent-card {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.transparent-card .main-title { color: #ffffff; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); }
+.transparent-card .description { color: #f8fafc; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); }
+
+.card-content { display: flex; flex-direction: column; gap: 24px; }
+
+.main-title {
+  font-size: 3rem;
+  font-weight: bold;
+  color: #1f2937;
+  margin-bottom: 16px;
+  line-height: 1.1;
+}
+
+.title-accent { display: block; color: #2563eb; }
+.description { font-size: 1.125rem; color: #4b5563; line-height: 1.7; }
+
+.button-section { padding-top: 16px; }
+
+.browse-button {
+  background: linear-gradient(135deg, #2563eb, #3730a3);
+  color: white;
+  padding: 16px 32px;
+  border-radius: 16px;
+  font-weight: 600;
+  font-size: 1.125rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.3s ease;
+}
+
+.browse-button:hover {
+  background: linear-gradient(135deg, #1d4ed8, #312e81);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  transform: scale(1.05);
+}
+
+.button-indicator {
+  width: 8px;
+  height: 8px;
+  background-color: white;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.browse-button:hover .button-indicator { width: 24px; }
+
+.rules-card {
+  background: linear-gradient(135deg, #fbbf24, #f97316);
+  border-radius: 24px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  padding: 32px;
+  color: white;
+  position: relative;
+  overflow: hidden;
+}
+
+.rules-decoration {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+}
+
+.rules-decoration-1 {
+  top: 0;
+  right: 0;
+  width: 128px;
+  height: 128px;
+  transform: translate(32px, -32px);
+}
+
+.rules-decoration-2 {
+  bottom: 0;
+  left: 0;
+  width: 96px;
+  height: 96px;
+  transform: translate(-24px, 24px);
+}
+
+.rules-content { position: relative; z-index: 15; }
+.rules-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.rules-title { font-size: 1.875rem; font-weight: bold; }
+.rules-list { display: flex; flex-direction: column; gap: 16px; }
+.rule-item {
+  display: flex; align-items: flex-start; gap: 16px; padding: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px; backdrop-filter: blur(4px);
+}
+.rule-icon { color: rgba(255, 255, 255, 0.8); margin-top: 4px; }
+.rule-text { color: rgba(255, 255, 255, 0.9); line-height: 1.6; margin: 0; }
+
+.help-section { margin-top: 32px; padding: 16px; background: rgba(255, 255, 255, 0.2); border-radius: 12px; backdrop-filter: blur(4px); }
+.help-text { font-size: 0.875rem; color: rgba(255, 255, 255, 0.8); text-align: center; margin: 0; }
+
+.bottom-message { text-align: center; margin-top: 48px; }
+.welcome-message { color: #ffffff; font-size: 1.125rem; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); }
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .main-content { flex-direction: column; gap: 32px; }
+  .left-section, .right-section { width: 100%; }
+  .main-title { font-size: 2.5rem; }
+}
+
+@media (max-width: 768px) {
+  .container { padding: 24px 16px; }
+  .card-logo-container { top: -40px; left: -40px; }
+  .card-logo-circle { width: 140px; height: 140px; }
+  .content-card { padding: 24px; padding-left: 60px; padding-top: 50px; margin-left: 40px; }
+  .main-title { font-size: 2rem; }
+}
+
+@media (max-width: 480px) {
+  .landing-page { background-attachment: scroll; }
+  .container { padding: 20px 12px; min-height: 100vh; }
+  .main-content { min-height: 85vh; }
+  .card-logo-container { top: -30px; left: -30px; }
+  .card-logo-circle { width: 120px; height: 120px; }
+  .content-card { padding-left: 50px; padding-top: 45px; margin-left: 30px; }
+}
