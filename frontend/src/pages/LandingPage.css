@@ -3,7 +3,7 @@
   min-height: 100vh;
   width: 100vw;
   /* Replace this with your library background image if needed */
-  background-image: url('/path-to-your-library-background.jpg');
+  background-image: url('../assets/BClibrary.png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -25,35 +25,7 @@
   z-index: 1;
 }
 
-.bg-decoration {
-  position: absolute;
-  border-radius: 50%;
-  opacity: 0.2;
-}
 
-.bg-decoration-1 {
-  top: 80px;
-  left: 40px;
-  width: 128px;
-  height: 128px;
-  background-color: #bfdbfe;
-  animation: pulse 2s infinite;
-}
-
-.bg-decoration-2 {
-  bottom: 80px;
-  right: 40px;
-  width: 96px;
-  height: 96px;
-  background-color: #e9d5ff;
-  animation: pulse 2s infinite;
-  animation-delay: 1s;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.2; }
-  50% { opacity: 0.3; }
-}
 
 .container {
   max-width: 1200px;
@@ -92,13 +64,13 @@
 .card-logo-circle {
   width: 200px;
   height: 200px;
-  background: linear-gradient(135deg, #2563eb, #3730a3);
+  background: linear-gradient( to bottom, #1203e7 100px, #efb104 100px);
   border-radius: 50%;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
-  transform: rotate(12deg);
+  transform: rotate(10deg);
   transition: transform 0.5s ease;
   border: 4px solid rgba(255, 255, 255, 0.8);
   overflow: hidden;
@@ -133,15 +105,19 @@
   padding-left: 80px;
   padding-top: 60px;
   margin-left: 60px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: transparent;
+  border: 1px solid rgba(175, 164, 164, 0.3);
   position: relative;
 }
 
 /* Transparent version for library background */
 .transparent-card {
-  background: rgba(255, 255, 255, 0.15);
+  background: transparent;
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-width: 5px;
+  border-style: solid;
+  border-image: linear-gradient(to bottom, #1203e7 50%, #efb104 50%) 1;
+  border-radius: 15px;
 }
 
 .transparent-card .main-title { color: #ffffff; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); }
@@ -150,10 +126,12 @@
 .card-content { display: flex; flex-direction: column; gap: 24px; }
 
 .main-title {
-  font-size: 3rem;
+  font-size: 2.1rem;
+  justify-content: center;
   font-weight: bold;
-  color: #1f2937;
-  margin-bottom: 16px;
+  color: #4088ed;
+  margin-bottom: 60px;
+  padding-left: 30px;
   line-height: 1.1;
 }
 
@@ -166,11 +144,16 @@
   background: linear-gradient(135deg, #2563eb, #3730a3);
   color: white;
   padding: 16px 32px;
-  border-radius: 16px;
   font-weight: 600;
   font-size: 1.125rem;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  border: none;
+  box-shadow: 0 10px 15px -3px rgba(248, 240, 240, 0.1);
+  
+  /* Border with blue and orange */
+  border-width: 5px;
+  border-style: solid;
+  border-image: linear-gradient(to bottom, #1203e7 50%, #efb104 50%) 1;
+  border-radius: 16px;
+
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -184,19 +167,17 @@
   transform: scale(1.05);
 }
 
-.button-indicator {
-  width: 8px;
-  height: 8px;
-  background-color: white;
-  border-radius: 50%;
-  transition: all 0.3s ease;
-}
+
 
 .browse-button:hover .button-indicator { width: 24px; }
 
 .rules-card {
-  background: linear-gradient(135deg, #fbbf24, #f97316);
-  border-radius: 24px;
+  border-width: 5px;
+  background: transparent;
+   backdrop-filter: blur(20px);
+  border-style: solid;
+  border-image: linear-gradient(to bottom, #1203e7 50%, #efb104 50%) 1;
+  border-radius: 15px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   padding: 32px;
   color: white;
@@ -236,7 +217,7 @@
   border-radius: 12px; backdrop-filter: blur(4px);
 }
 .rule-icon { color: rgba(255, 255, 255, 0.8); margin-top: 4px; }
-.rule-text { color: rgba(255, 255, 255, 0.9); line-height: 1.6; margin: 0; }
+.rule-text { color: rgba(246, 243, 243, 0.9); line-height: 1.6; margin: 0; }
 
 .help-section { margin-top: 32px; padding: 16px; background: rgba(255, 255, 255, 0.2); border-radius: 12px; backdrop-filter: blur(4px); }
 .help-text { font-size: 0.875rem; color: rgba(255, 255, 255, 0.8); text-align: center; margin: 0; }
@@ -247,7 +228,7 @@
 /* Responsive Design */
 @media (max-width: 1024px) {
   .main-content { flex-direction: column; gap: 32px; }
-  .left-section, .right-section { width: 100%; }
+  .left-section, .right-section { width: 100%; }  
   .main-title { font-size: 2.5rem; }
 }
 

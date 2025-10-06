@@ -1,19 +1,32 @@
 // models/Book.js
 const mongoose = require("mongoose");
 
-const bookSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  author: { type: String, required: true },
-  ISBN: { type: String, unique: true },
-  category: { type: String },
-  volume: { type: String },
-  publisher: { type: String },
-  publicationYear: { type: Number },
-  shelfLocation: { type: String },
-  editions: { type: String },
-  coverImage: { type: String }, // file path / URL
+const bookSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true, trim: true },
+    author: { type: String, required: true, trim: true },
+    ISBN: { type: String, unique: true, sparse: true }, // unique but can be null
+    category: { type: String, trim: true },
+    volume: { type: String, trim: true },
+    publisher: { type: String, trim: true },
+    publicationYear: { type: Number },
+    shelfLocation: { type: String, trim: true },
 
-  availableCopies: { type: Number, default: 1 }
-}, { timestamps: true });
+    editions: [{ type: String, trim: true }], // array for multiple editions
+    coverImage: { type: String }, // URL or file path
+
+    totalCopies: { type: Number, default: 1 },
+    availableCopies: { type: Number, default: 1 },
+
+    status: {
+      type: String,
+      enum: ["available", "borrowed", "reserved"],
+      default: "available",
+    },
+
+    isDeleted: { type: Boolean, default: false }, // soft delete
+  },
+  { timestamps: true }
+);
 
 module.exports = mongoose.model("Book", bookSchema);

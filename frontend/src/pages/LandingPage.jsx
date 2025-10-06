@@ -1,29 +1,24 @@
-// LandingPage.js
+
+// src/pages/LandingPage.jsx
 import React from "react";
 import "./LandingPage.css";
-import bclogo from "../assets/bclogo.jpg"; // Import your logo
+import bclogo from "../assets/bclogo.jpg"; 
+import { useNavigate } from "react-router-dom";
 
 const LandingPage = () => {
-  const handleBrowseBooks = () => {
-    // Navigate to books catalog - you can replace this with your routing logic
-    console.log("Navigate to books catalog");
-  };
+  const navigate = useNavigate();
 
+  const handleBrowseBooks = () => {
+    navigate("/books"); // ✅ go to StudentBooks.jsx page
+  };
   return (
+    
     <div className="landing-page">
-      {/* Background decorative elements */}
-      <div className="bg-decoration bg-decoration-1"></div>
-      <div className="bg-decoration bg-decoration-2"></div>
       
       <div className="container">
-        {/* Main Content Container */}
         <div className="main-content">
-          
-          {/* Left Side - Welcome Content */}
           <div className="left-section">
-            {/* Main Content Card - Now Transparent */}
             <div className="content-card transparent-card">
-              {/* Logo positioned in upper left of card as overlapping circle */}
               <div className="card-logo-container">
                 <div className="card-logo-circle">
                   <img 
@@ -43,6 +38,9 @@ const LandingPage = () => {
                   <p className="description">
                     Discover a world of knowledge at your fingertips. Our digital kiosk provides 
                     seamless access to thousands of books, journals, and digital resources.
+                    seamless access to thousands of books, journals, and digital resources.
+                    seamless access to thousands of books, journals. and digital resources.
+                    journals. and digital resources.
                   </p>
                 </div>
                 
@@ -51,7 +49,6 @@ const LandingPage = () => {
                   <button onClick={handleBrowseBooks} className="browse-button">
                     <span className="button-icon">📖</span>
                     <span>Browse Books</span>
-                    <div className="button-indicator"></div>
                   </button>
                 </div>
               </div>
@@ -61,10 +58,6 @@ const LandingPage = () => {
           {/* Right Side - Rules & Regulations */}
           <div className="right-section">
             <div className="rules-card">
-              {/* Decorative background pattern */}
-              <div className="rules-decoration rules-decoration-1"></div>
-              <div className="rules-decoration rules-decoration-2"></div>
-              
               <div className="rules-content">
                 <div className="rules-header">
                   <span className="rules-icon">🛡️</span>
@@ -112,13 +105,6 @@ const LandingPage = () => {
               </div>
             </div>
           </div>
-        </div>
-        
-        {/* Bottom Welcome Message */}
-        <div className="bottom-message">
-          <p className="welcome-message">
-            Welcome to your gateway to knowledge and learning
-          </p>
         </div>
       </div>
     </div>
