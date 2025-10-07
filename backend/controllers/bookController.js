@@ -17,7 +17,8 @@ exports.createBook = async (req, res) => {
       shelfLocation, 
       editions,
       totalCopies,
-      availableCopies
+      availableCopies,
+      description
     } = req.body;
 
     // if an image is uploaded, multer gives us req.file
@@ -37,6 +38,7 @@ exports.createBook = async (req, res) => {
       totalCopies: parseInt(totalCopies) || 1,
       availableCopies: parseInt(availableCopies) || 1,
       status: "available",
+      description
     });
 
     await newBook.save();
@@ -70,7 +72,8 @@ exports.updateBook = async (req, res) => {
       shelfLocation, 
       editions,
       totalCopies,
-      availableCopies
+      availableCopies,
+      description
     } = req.body;
 
     // if an image is uploaded, multer gives us req.file
@@ -85,6 +88,7 @@ exports.updateBook = async (req, res) => {
       publisher,
       publicationYear,
       shelfLocation,
+      description
     };
 
     // Handle editions
