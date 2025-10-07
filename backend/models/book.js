@@ -11,6 +11,7 @@ const bookSchema = new mongoose.Schema(
     publisher: { type: String, trim: true },
     publicationYear: { type: Number },
     shelfLocation: { type: String, trim: true },
+     description: { type: String, trim: true },
 
     editions: [{ type: String, trim: true }], // array for multiple editions
     coverImage: { type: String }, // URL or file path
@@ -29,4 +30,5 @@ const bookSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model("Book", bookSchema);
+module.exports = mongoose.models.Book || mongoose.model("Book", bookSchema);
+
