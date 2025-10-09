@@ -415,6 +415,35 @@ function BookSection({
                     }}
                   />
                 </div>
+                   <div style={{ marginBottom: '24px' }}>
+                  <label style={{ 
+                    display: 'block', 
+                    fontSize: '14px', 
+                    fontWeight: '500', 
+                    color: '#374151', 
+                    marginBottom: '6px' 
+                  }}>
+                    Description / Introduction
+                  </label>
+                  <textarea
+                    name="description"
+                    value={bookForm.description || ''}
+                    onChange={handleBookFormChange}
+                    rows="4"
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      color: '#373737ff',
+                      backgroundColor: '#ffffffff',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      resize: 'vertical'
+                    }}
+                    placeholder="Write a short description about this book..."
+                  ></textarea>
+                </div>
+
               </div>
 
               <button
@@ -991,6 +1020,7 @@ function BookSection({
                     }}
                   />
                 </div>
+                
               </div>
 
               <div style={{ display: 'flex', gap: '12px' }}>
