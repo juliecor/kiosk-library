@@ -7,6 +7,9 @@ import DashboardOverview from "../components/admin/DashboardOverview";
 import StudentSection from "../components/admin/students/StudentSection";
 import BookSection from "../components/admin/books/BookSection";
 import BorrowRequestsSection from "../components/admin/requests/BorrowRequestsSection";
+import ReportsSection from "../components/admin/reports/ReportsSection";
+
+
 
 function AdminDashboard() {
   const [adminData, setAdminData] = useState(null);
@@ -69,6 +72,7 @@ const handleCloseHistory = () => {
     editions: '',
     totalCopies: 1,
     availableCopies: 1,
+    description:'',
     image: null
   });
 
@@ -226,6 +230,7 @@ const handleCloseHistory = () => {
       volume: book.volume || '',
       publisher: book.publisher || '',
       publicationYear: book.publicationYear || '',
+      description:book.description || '',
       shelfLocation: book.shelfLocation || '',
       editions: book.editions ? book.editions.join(', ') : '',
       totalCopies: book.totalCopies,
@@ -286,6 +291,9 @@ const handleCloseHistory = () => {
       formData.append('editions', editBookForm.editions);
       formData.append('totalCopies', editBookForm.totalCopies);
       formData.append('availableCopies', editBookForm.availableCopies);
+      formData.append("description", editBookForm.description);
+
+
       
       if (editBookForm.image) {
         formData.append('image', editBookForm.image);
@@ -421,6 +429,7 @@ const handleCloseHistory = () => {
       formData.append('editions', bookForm.editions);
       formData.append('totalCopies', bookForm.totalCopies);
       formData.append('availableCopies', bookForm.availableCopies);
+      formData.append("description", bookForm.description);
       
       if (bookForm.image) {
         formData.append('image', bookForm.image);
@@ -450,6 +459,7 @@ const handleCloseHistory = () => {
           editions: '',
           totalCopies: 1,
           availableCopies: 1,
+          description:'',
           image: null
         });
         setImagePreview(null);
@@ -692,19 +702,26 @@ const handleCloseHistory = () => {
             <BorrowRequestsSection />
           )}
 
-          {activeSection !== 'dashboard' && activeSection !== 'students' && activeSection !== 'books' && activeSection !== 'requests' && (
-            <div className="admin-placeholder-section">
-              <div className="admin-placeholder-icon">
-                {navItems.find(item => item.id === activeSection)?.icon}
-              </div>
-              <h3 className="admin-placeholder-title">
-                {navItems.find(item => item.id === activeSection)?.label} Section
-              </h3>
-              <p className="admin-placeholder-text">
-                This section will contain your {activeSection} management interface.
-              </p>
-            </div>
-          )}
+        
+        
+                            {activeSection === 'reports' && (
+                    <ReportsSection />
+                  )}
+
+                  {activeSection !== 'dashboard' && activeSection !== 'students' && activeSection !== 'books' && activeSection !== 'requests' && activeSection !== 'reports' && (
+                    <div className="admin-placeholder-section">
+                      <div className="admin-placeholder-icon">
+                        {navItems.find(item => item.id === activeSection)?.icon}
+                      </div>
+                      <h3 className="admin-placeholder-title">
+                        {navItems.find(item => item.id === activeSection)?.label} Section
+                      </h3>
+                      <p className="admin-placeholder-text">
+                        This section will contain your {activeSection} management interface.
+                      </p>
+                    </div>
+                  )}
+
         </div>
       </main>
     </div>

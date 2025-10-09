@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import "./StudentBooks.css";
 import bclogo from "../assets/bclogo.jpg";
+import BookDetailsModal from "../components/admin/students/BookDetailsModal";
 
 export default function StudentBooks() {
   const [books, setBooks] = useState([]);
@@ -10,6 +11,12 @@ export default function StudentBooks() {
   const [studentId, setStudentId] = useState("");
   const [showPopup, setShowPopup] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [viewingBook, setViewingBook] = useState(null);
+
+  // NEW STATES for filters/sorting
+  const [filterShelf, setFilterShelf] = useState("");
+  const [filterYear, setFilterYear] = useState("");
+  const [sortBy, setSortBy] = useState("");
 
   useEffect(() => {
     fetchBooks();
@@ -20,7 +27,6 @@ export default function StudentBooks() {
     try {
       const res = await axios.get("http://localhost:5000/api/books");
       if (res.data.success) {
-        // Only show available books
         setBooks(res.data.books.filter(book => book.availableCopies > 0));
       } else {
         setBooks([]);
@@ -33,20 +39,38 @@ export default function StudentBooks() {
     }
   };
 
-  // Enhanced search - search by title, author, ISBN, and category
-  const filteredBooks = books.filter((book) => {
-    const searchLower = search.toLowerCase();
-    return (
-      book.title.toLowerCase().includes(searchLower) ||
-      book.author.toLowerCase().includes(searchLower) ||
-      (book.ISBN && book.ISBN.toLowerCase().includes(searchLower)) ||
-      (book.category && book.category.toLowerCase().includes(searchLower))
-    );
-  });
+  // Apply filters, search, and sorting
+  const filteredBooks = books
+    .filter((book) => {
+      const searchLower = search.toLowerCase();
+      const matchSearch =
+        book.title.toLowerCase().includes(searchLower) ||
+        book.author.toLowerCase().includes(searchLower) ||
+        (book.ISBN && book.ISBN.toLowerCase().includes(searchLower)) ||
+        (book.category && book.category.toLowerCase().includes(searchLower));
+
+      const matchShelf = filterShelf ? book.shelfLocation === filterShelf : true;
+      const matchYear = filterYear ? String(book.publicationYear) === filterYear : true;
+
+      return matchSearch && matchShelf && matchYear;
+    })
+    .sort((a, b) => {
+      if (sortBy === "title") return a.title.localeCompare(b.title);
+      if (sortBy === "year") return (b.publicationYear || 0) - (a.publicationYear || 0);
+      return 0;
+    });
 
   const handleBorrowClick = (book) => {
     setSelectedBook(book);
     setShowPopup(true);
+  };
+
+  const handlePreviewClick = (book) => {
+    setViewingBook(book);
+  };
+
+  const handleClosePreview = () => {
+    setViewingBook(null);
   };
 
   const handleBorrowConfirm = async () => {
@@ -65,7 +89,7 @@ export default function StudentBooks() {
       setShowPopup(false);
       setStudentId("");
       setSelectedBook(null);
-      fetchBooks(); // Refresh to update available copies
+      fetchBooks();
     } catch (error) {
       console.error("Error submitting borrow request:", error);
       alert(error.response?.data?.message || "Failed to submit borrow request.");
@@ -78,15 +102,23 @@ export default function StudentBooks() {
     setSelectedBook(null);
   };
 
+  const handleResetFilters = () => {
+    setSearch("");
+    setFilterShelf("");
+    setFilterYear("");
+    setSortBy("");
+  };
+
+  // Unique filter options
+  const shelfOptions = [...new Set(books.map(b => b.shelfLocation).filter(Boolean))];
+  const yearOptions = [...new Set(books.map(b => b.publicationYear).filter(Boolean))].sort((a, b) => b - a);
+
   return (
     <div className="student-books-container">
-      {/* Header Section */}
       <div className="student-books-header">
         <h1 className="student-books-title">BENEDICTO COLLEGE LIBRARY BOOKS</h1>
-        
       </div>
 
-      {/* Search Bar */}
       <div className="search-container">
         <input
           type="text"
@@ -98,23 +130,47 @@ export default function StudentBooks() {
         <span className="search-icon">🔍</span>
       </div>
 
-      {/* Results Count */}
+      {/* Filters Section */}
+      <div className="filters-container">
+        <select value={filterShelf} onChange={(e) => setFilterShelf(e.target.value)}>
+          <option value="">All Shelf Locations</option>
+          {shelfOptions.map((shelf, index) => (
+            <option key={index} value={shelf}>{shelf}</option>
+          ))}
+        </select>
+
+        <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)}>
+          <option value="">All Years</option>
+          {yearOptions.map((year, index) => (
+            <option key={index} value={year}>{year}</option>
+          ))}
+        </select>
+
+        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+          <option value="">Sort By</option>
+          <option value="title">Title (A–Z)</option>
+          <option value="year">Publication Year (Newest)</option>
+        </select>
+
+        <button className="reset-filters-btn" onClick={handleResetFilters}>
+          Reset Filters
+        </button>
+      </div>
+
       {!loading && (
         <div className="results-count">
           <p>
-            Showing {filteredBooks.length} {filteredBooks.length === 1 ? 'book' : 'books'}
+            Showing {filteredBooks.length} {filteredBooks.length === 1 ? "book" : "books"}
           </p>
         </div>
       )}
 
-      {/* Loading State */}
       {loading ? (
         <div className="loading-container">
           <div className="spinner"></div>
           <p>Loading books...</p>
         </div>
       ) : (
-        /* Book Grid */
         <div className="student-books-grid">
           {filteredBooks.length > 0 ? (
             filteredBooks.map((book) => (
@@ -130,37 +186,32 @@ export default function StudentBooks() {
                     <div className="no-image">📚</div>
                   )}
                 </div>
-                
+
                 <div className="student-book-info">
                   <h3 className="book-title">{book.title}</h3>
                   <p className="book-author">by {book.author}</p>
-                  
-                  {/* Tags */}
+
                   <div className="book-tags">
-                    {book.category && (
-                      <span className="tag category-tag">{book.category}</span>
-                    )}
-                    {book.publicationYear && (
-                      <span className="tag year-tag">{book.publicationYear}</span>
-                    )}
+                    {book.category && <span className="tag category-tag">{book.category}</span>}
+                    {book.publicationYear && <span className="tag year-tag">{book.publicationYear}</span>}
                   </div>
 
-                  {/* Availability Badge */}
                   <div className="availability-badge">
                     <span className="badge-icon">✓</span>
                     <span className="badge-text">
-                      {book.availableCopies} {book.availableCopies === 1 ? 'copy' : 'copies'} available
+                      {book.availableCopies} {book.availableCopies === 1 ? "copy" : "copies"} available
                     </span>
                   </div>
                 </div>
 
-                <button
-                  className="student-borrow-btn"
-                  onClick={() => handleBorrowClick(book)}
-                >
-                  <span className="btn-icon">📖</span>
-                  <span>Borrow Book</span>
-                </button>
+                <div className="book-card-actions">
+                  <button className="student-preview-btn" onClick={() => handlePreviewClick(book)}>
+                    <span className="btn-icon">👁️</span> <span>Preview</span>
+                  </button>
+                  <button className="student-borrow-btn" onClick={() => handleBorrowClick(book)}>
+                    <span className="btn-icon">📖</span> <span>Borrow</span>
+                  </button>
+                </div>
               </div>
             ))
           ) : (
@@ -180,10 +231,11 @@ export default function StudentBooks() {
             <button className="close-btn" onClick={handleClosePopup}>×</button>
 
             <div className="popup-header">
-            <img src={bclogo} alt="School Logo" className="popup-icon" />
-            <h2>Borrow Request</h2>
+              <img src={bclogo} alt="School Logo" className="popup-icon" />
+              <h2>Borrow Request</h2>
             </div>
-                      <div className="popup-book-info">
+
+            <div className="popup-book-info">
               <p className="popup-label">You are requesting:</p>
               <p className="popup-book-title">{selectedBook.title}</p>
               <p className="popup-book-author">by {selectedBook.author}</p>
@@ -194,7 +246,6 @@ export default function StudentBooks() {
               <input
                 id="studentId"
                 type="text"
-                placeholder=""
                 value={studentId}
                 onChange={(e) => setStudentId(e.target.value)}
                 className="student-id-input"
@@ -203,15 +254,15 @@ export default function StudentBooks() {
             </div>
 
             <div className="popup-buttons">
-              <button onClick={handleBorrowConfirm} className="confirm-btn">
-                Confirm Request
-              </button>
-              <button onClick={handleClosePopup} className="cancel-btn">
-                Cancel
-              </button>
+              <button onClick={handleBorrowConfirm} className="confirm-btn">Confirm Request</button>
+              <button onClick={handleClosePopup} className="cancel-btn">Cancel</button>
             </div>
           </div>
         </div>
+      )}
+
+      {viewingBook && (
+        <BookDetailsModal book={viewingBook} onClose={handleClosePreview} onBorrow={handleBorrowClick} />
       )}
     </div>
   );
