@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { CheckCircle, XCircle, AlertCircle, X } from "lucide-react";
 
 function BorrowRequestsSection() {
   const [requests, setRequests] = useState([]);
@@ -8,11 +9,39 @@ function BorrowRequestsSection() {
   const [actionLoading, setActionLoading] = useState(null);
   const [showConditionModal, setShowConditionModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
-  const [bookCondition, setBookCondition] = useState("Good");
+  const [bookCondition, setBookCondition] = useState("good"); // ✅ Changed from "Good"
+  
+  // Toast notification state
+  const [toasts, setToasts] = useState([]);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
 
   useEffect(() => {
     fetchRequests();
   }, []);
+
+  // Toast notification function
+  const showToast = (message, type = "success") => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    }, 4000);
+  };
+
+  // Confirmation dialog function
+  const showConfirm = (message, onConfirm) => {
+    setConfirmAction({ message, onConfirm });
+    setShowConfirmDialog(true);
+  };
+
+  const handleConfirmDialogYes = () => {
+    if (confirmAction?.onConfirm) {
+      confirmAction.onConfirm();
+    }
+    setShowConfirmDialog(false);
+    setConfirmAction(null);
+  };
 
   const fetchRequests = async () => {
     setLoading(true);
@@ -36,56 +65,55 @@ function BorrowRequestsSection() {
   };
 
   const handleApprove = async (requestId) => {
-    if (!window.confirm("Are you sure you want to approve this request?"))
-      return;
-    setActionLoading(requestId);
-    try {
-      const token = localStorage.getItem("adminToken");
-      const response = await axios.put(
-        `http://localhost:5000/api/borrow/approve/${requestId}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (response.data.success) {
-        alert("Request approved successfully!");
-        fetchRequests();
+    showConfirm("Are you sure you want to approve this request?", async () => {
+      setActionLoading(requestId);
+      try {
+        const token = localStorage.getItem("adminToken");
+        const response = await axios.put(
+          `http://localhost:5000/api/borrow/approve/${requestId}`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (response.data.success) {
+          showToast("Request approved successfully!", "success");
+          fetchRequests();
+        }
+      } catch (error) {
+        showToast(error.response?.data?.message || "Failed to approve request", "error");
+      } finally {
+        setActionLoading(null);
       }
-    } catch (error) {
-      alert(error.response?.data?.message || "Failed to approve request");
-    } finally {
-      setActionLoading(null);
-    }
+    });
   };
 
   const handleDeny = async (requestId) => {
-    if (!window.confirm("Are you sure you want to deny this request?")) return;
-    setActionLoading(requestId);
-    try {
-      const token = localStorage.getItem("adminToken");
-      const response = await axios.put(
-        `http://localhost:5000/api/borrow/deny/${requestId}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (response.data.success) {
-        alert("Request denied");
-        fetchRequests();
+    showConfirm("Are you sure you want to deny this request?", async () => {
+      setActionLoading(requestId);
+      try {
+        const token = localStorage.getItem("adminToken");
+        const response = await axios.put(
+          `http://localhost:5000/api/borrow/deny/${requestId}`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (response.data.success) {
+          showToast("Request denied", "info");
+          fetchRequests();
+        }
+      } catch (error) {
+        showToast(error.response?.data?.message || "Failed to deny request", "error");
+      } finally {
+        setActionLoading(null);
       }
-    } catch (error) {
-      alert(error.response?.data?.message || "Failed to deny request");
-    } finally {
-      setActionLoading(null);
-    }
+    });
   };
 
-  // ✅ Open the modal before returning book
   const handleReturnClick = (request) => {
     setSelectedRequest(request);
-    setBookCondition("Good");
+    setBookCondition("good"); // ✅ Changed from "Good"
     setShowConditionModal(true);
   };
 
-  // ✅ Confirm the book return with selected condition
   const handleConfirmReturn = async () => {
     if (!selectedRequest) return;
     setActionLoading(selectedRequest._id);
@@ -99,37 +127,37 @@ function BorrowRequestsSection() {
       );
 
       if (response.data.success) {
-        alert(`Book marked as returned (${bookCondition})!`);
+        showToast(`Book marked as returned (${bookCondition})!`, "success");
         fetchRequests();
         setShowConditionModal(false);
       }
     } catch (error) {
-      alert(error.response?.data?.message || "Failed to process return");
+      showToast(error.response?.data?.message || "Failed to process return", "error");
     } finally {
       setActionLoading(null);
     }
   };
 
   const handlePayLateFee = async (requestId) => {
-    if (!window.confirm("Confirm that the student has paid the late fee?"))
-      return;
-    setActionLoading(requestId);
-    try {
-      const token = localStorage.getItem("adminToken");
-      const response = await axios.put(
-        `http://localhost:5000/api/borrow/pay-fee/${requestId}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (response.data.success) {
-        alert("Late fee marked as paid!");
-        fetchRequests();
+    showConfirm("Confirm that the student has paid the late fee?", async () => {
+      setActionLoading(requestId);
+      try {
+        const token = localStorage.getItem("adminToken");
+        const response = await axios.put(
+          `http://localhost:5000/api/borrow/pay-fee/${requestId}`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (response.data.success) {
+          showToast("Late fee marked as paid!", "success");
+          fetchRequests();
+        }
+      } catch (error) {
+        showToast(error.response?.data?.message || "Failed to mark fee as paid", "error");
+      } finally {
+        setActionLoading(null);
       }
-    } catch (error) {
-      alert(error.response?.data?.message || "Failed to mark fee as paid");
-    } finally {
-      setActionLoading(null);
-    }
+    });
   };
 
   const calculateOverdue = (dueDate, returnedAt, status) => {
@@ -384,53 +412,170 @@ function BorrowRequestsSection() {
         )}
       </div>
 
-      {/* ✅ Modal for selecting book condition */}
+      {/* Enhanced Modal with Student Name */}
       {showConditionModal && (
         <div style={modalOverlayStyle}>
           <div style={modalStyle}>
-            <h3 style={{ fontSize: "20px", marginBottom: "15px" }}>
-              Select Book Condition
-            </h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h3 style={{ fontSize: "20px", margin: 0, fontWeight: "600" }}>
+                Return Book
+              </h3>
+              <button
+                onClick={() => setShowConditionModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                <X size={20} color="#6b7280" />
+              </button>
+            </div>
+
+            {/* Student Info */}
+            <div style={{
+              backgroundColor: "#f9fafb",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              marginBottom: "20px",
+              border: "1px solid #e5e7eb"
+            }}>
+              <p style={{ margin: "0 0 4px 0", fontSize: "12px", color: "#6b7280", fontWeight: "500" }}>
+                Student
+              </p>
+              <p style={{ margin: 0, fontSize: "16px", color: "#1f2937", fontWeight: "600" }}>
+                {selectedRequest?.student?.firstName} {selectedRequest?.student?.lastName}
+              </p>
+              <p style={{ margin: "4px 0 0 0", fontSize: "14px", color: "#6b7280" }}>
+                ID: {selectedRequest?.student?.studentId}
+              </p>
+            </div>
+
+            {/* Book Info */}
+            <div style={{
+              backgroundColor: "#f9fafb",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              marginBottom: "20px",
+              border: "1px solid #e5e7eb"
+            }}>
+              <p style={{ margin: "0 0 4px 0", fontSize: "12px", color: "#6b7280", fontWeight: "500" }}>
+                Book
+              </p>
+              <p style={{ margin: 0, fontSize: "16px", color: "#1f2937", fontWeight: "600" }}>
+                {selectedRequest?.book?.title}
+              </p>
+              <p style={{ margin: "4px 0 0 0", fontSize: "14px", color: "#6b7280" }}>
+                by {selectedRequest?.book?.author}
+              </p>
+            </div>
+
+            {/* Condition Selector */}
+            <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: "500", color: "#374151" }}>
+              Book Condition
+            </label>
             <select
               value={bookCondition}
               onChange={(e) => setBookCondition(e.target.value)}
               style={{
                 width: "100%",
-                height:"50px",
+                height: "50px",
                 padding: "10px",
+                color:"#232324ff",
                 fontSize: "16px",
                 borderRadius: "8px",
-                border: "1px solid #ccc",
-                marginBottom: "20px",
+                border: "1px solid #d1d5db",
+                marginBottom: "24px",
+                cursor: "pointer",
+                backgroundColor: "white",
               }}
             >
-              <option value="Good">Good Condition</option>
-              <option value="Damaged">Damaged</option>
-              <option value="Lost">Lost</option>
+              <option value="good">Good Condition</option>
+              <option value="damaged">Damaged</option>
+              <option value="lost">Lost</option>
             </select>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
               <button
                 onClick={() => setShowConditionModal(false)}
                 style={{
-                  padding: "8px 14px",
-                  background: "#3872e7ff",
+                  padding: "10px 20px",
+                  background: "#f3f4f6",
+                  color: "#374151",
                   border: "none",
                   borderRadius: "8px",
                   cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: "500",
                 }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmReturn}
+                disabled={actionLoading === selectedRequest?._id}
                 style={{
-                  padding: "8px 14px",
-                  background: "#ee8b35ff",
+                  padding: "10px 20px",
+                  background: actionLoading === selectedRequest?._id ? "#9ca3af" : "#ee8b35ff",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: actionLoading === selectedRequest?._id ? "not-allowed" : "pointer",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                }}
+              >
+                {actionLoading === selectedRequest?._id ? "Processing..." : "Confirm Return"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog */}
+      {showConfirmDialog && (
+        <div style={modalOverlayStyle}>
+          <div style={{...modalStyle, width: "400px"}}>
+            <div style={{ textAlign: "center", marginBottom: "20px" }}>
+              <AlertCircle size={48} color="#f59e0b" style={{ margin: "0 auto 12px" }} />
+              <h3 style={{ fontSize: "18px", margin: "0 0 8px 0", fontWeight: "600" }}>
+                Confirm Action
+              </h3>
+              <p style={{ margin: 0, color: "#6b7280", fontSize: "14px" }}>
+                {confirmAction?.message}
+              </p>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
+              <button
+                onClick={() => setShowConfirmDialog(false)}
+                style={{
+                  padding: "10px 24px",
+                  background: "#f3f4f6",
+                  color: "#374151",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: "500",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDialogYes}
+                style={{
+                  padding: "10px 24px",
+                  background: "#3b82f6",
                   color: "white",
                   border: "none",
                   borderRadius: "8px",
                   cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: "500",
                 }}
               >
                 Confirm
@@ -439,11 +584,84 @@ function BorrowRequestsSection() {
           </div>
         </div>
       )}
+
+      {/* Toast Notifications */}
+      <div style={{
+        position: "fixed",
+        top: "20px",
+        right: "20px",
+        zIndex: 9999,
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",
+      }}>
+        {toasts.map((toast) => (
+          <Toast key={toast.id} message={toast.message} type={toast.type} onClose={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} />
+        ))}
+      </div>
     </div>
   );
 }
 
-// 🎨 Styling
+// Toast Component
+function Toast({ message, type, onClose }) {
+  const styles = {
+    success: { bg: "#10b981", icon: <CheckCircle size={20} /> },
+    error: { bg: "#ef4444", icon: <XCircle size={20} /> },
+    info: { bg: "#3b82f6", icon: <AlertCircle size={20} /> },
+  };
+
+  const style = styles[type] || styles.success;
+
+  return (
+    <div
+      style={{
+        backgroundColor: style.bg,
+        color: "white",
+        padding: "12px 16px",
+        borderRadius: "8px",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        minWidth: "300px",
+        maxWidth: "400px",
+        animation: "slideIn 0.3s ease-out",
+      }}
+    >
+      {style.icon}
+      <span style={{ flex: 1, fontSize: "14px", fontWeight: "500" }}>{message}</span>
+      <button
+        onClick={onClose}
+        style={{
+          background: "none",
+          border: "none",
+          color: "white",
+          cursor: "pointer",
+          padding: "2px",
+          display: "flex",
+          alignItems: "center",
+        }}
+      >
+        <X size={16} />
+      </button>
+      <style>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(400px);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// Styling
 const thStyle = {
   padding: "12px",
   textAlign: "left",
@@ -469,14 +687,17 @@ const modalOverlayStyle = {
   alignItems: "center",
   justifyContent: "center",
   zIndex: 1000,
+  animation: "fadeIn 0.2s ease-out",
 };
 
 const modalStyle = {
   backgroundColor: "white",
   padding: "30px",
   borderRadius: "12px",
-  width: "400px",
-  boxShadow: "0 4px 10px rgba(0,0,0,0.2)",
+  width: "480px",
+  maxWidth: "90%",
+  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+  animation: "scaleIn 0.2s ease-out",
 };
 
 export default BorrowRequestsSection;
