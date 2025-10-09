@@ -1,5 +1,5 @@
 // controllers/borrowController.js
-const BorrowedRequest = require("../models/BorrowedRequest");
+const BorrowedRequest = require("../models/borrowedRequest");
 const Student = require("../models/student");
 const Book = require("../models/book");
 const axios = require("axios");
@@ -60,11 +60,15 @@ exports.getAllRequests = async (req, res) => {
 exports.approveRequest = async (req, res) => {
   try {
     const request = await BorrowedRequest.findById(req.params.id).populate("student book");
-
     if (!request) return res.status(404).json({ success: false, message: "Request not found" });
 
+    const now = new Date();
+    const dueDate = new Date(now);
+    dueDate.setDate(now.getDate() + 1); // ✅ due in 1 day
+
     request.status = "approved";
-    request.borrowDate = new Date();
+    request.borrowDate = now;
+    request.dueDate = dueDate;
     await request.save();
 
     await Book.findByIdAndUpdate(request.book._id, { $inc: { availableCopies: -1 } });
@@ -73,18 +77,16 @@ exports.approveRequest = async (req, res) => {
     let smsSent = false;
     try {
       if (request.student?.contactNumber) {
-        const borrowDateStr = request.borrowDate.toLocaleString();
         await axios.get(SMS_GATEWAY_URL, {
           params: {
             to: request.student.contactNumber,
-            message: `BENEDICTO COLLEGE LIBRARY: Hi ${request.student.firstName}, your borrow request for "${request.book.title}" has been APPROVED. Borrowed: ${borrowDateStr}.`
+            message: `BENEDICTO COLLEGE LIBRARY: Hi ${request.student.firstName}, your borrow request for "${request.book.title}" has been APPROVED. Due Date: ${dueDate.toLocaleString()}.`
           }
         });
         smsSent = true;
-        console.log("Approval SMS sent successfully");
       }
     } catch (err) {
-      console.error("SMS failed to send:", err.message);
+      console.error("SMS failed:", err.message);
     }
 
     res.json({ success: true, message: "Request approved", request, smsStatus: smsSent ? "sent" : "failed" });
@@ -100,31 +102,26 @@ exports.approveRequest = async (req, res) => {
 exports.denyRequest = async (req, res) => {
   try {
     const request = await BorrowedRequest.findById(req.params.id).populate("student book");
-
     if (!request) return res.status(404).json({ success: false, message: "Request not found" });
 
     request.status = "denied";
     await request.save();
 
-    // SMS sending
-    let smsSent = false;
+    // SMS
     try {
       if (request.student?.contactNumber) {
-        const deniedDateStr = new Date().toLocaleString();
         await axios.get(SMS_GATEWAY_URL, {
           params: {
             to: request.student.contactNumber,
-            message: `BENEDICTO COLLEGE LIBRARY: Sorry ${request.student.firstName}, your borrow request for "${request.book.title}" has been DENIED. Date: ${deniedDateStr}.`
+            message: `BENEDICTO COLLEGE LIBRARY: Sorry ${request.student.firstName}, your borrow request for "${request.book.title}" has been DENIED.`
           }
         });
-        smsSent = true;
-        console.log("Denial SMS sent successfully");
       }
     } catch (err) {
-      console.error("SMS failed to send:", err.message);
+      console.error("SMS failed:", err.message);
     }
 
-    res.json({ success: true, message: "Request denied", request, smsStatus: smsSent ? "sent" : "failed" });
+    res.json({ success: true, message: "Request denied", request });
   } catch (error) {
     console.error("denyRequest error:", error);
     res.status(500).json({ success: false, message: "Server error" });
@@ -136,30 +133,37 @@ exports.denyRequest = async (req, res) => {
 // ==========================
 exports.returnBook = async (req, res) => {
   try {
+    const { condition } = req.body; // ✅ librarian sends book condition
     const request = await BorrowedRequest.findById(req.params.id).populate("student book");
-
     if (!request) return res.status(404).json({ success: false, message: "Request not found" });
 
-    request.status = "returned";
-    request.returnDate = new Date();
-
-    const dueDate = new Date(request.borrowDate || request.createdAt);
-    dueDate.setDate(dueDate.getDate() + 1);
     const now = new Date();
+    const dueDate = request.dueDate ? new Date(request.dueDate) : new Date(request.borrowDate);
+    const isLate = now > dueDate;
 
-    if (now > dueDate) {
+    request.status = "returned";
+    request.returnDate = now;
+    request.bookCondition = condition || "good";
+    request.isLate = isLate;
+
+    if (isLate) {
       const daysLate = Math.ceil((now - dueDate) / (1000 * 60 * 60 * 24));
-      request.lateFee = daysLate * 5; // PHP 5 per day
+      request.lateFee = daysLate * 5; // ₱5/day
     } else {
       request.lateFee = 0;
     }
 
     await request.save();
 
-    await Book.findByIdAndUpdate(request.book._id, { $inc: { availableCopies: 1 } });
+    // ✅ Only restock the book if it's not lost or damaged
+    if (condition === "good") {
+      await Book.findByIdAndUpdate(request.book._id, { $inc: { availableCopies: 1 } });
+    } else if (condition === "lost") {
+      await Book.findByIdAndUpdate(request.book._id, { $inc: { totalCopies: -1 } });
+    }
 
-    // SMS sending
-    let smsSent = false;
+    // SMS
+     let smsSent = false;
     try {
       if (request.student?.contactNumber) {
         const borrowDateStr = request.borrowDate.toLocaleString();
@@ -184,21 +188,20 @@ exports.returnBook = async (req, res) => {
   }
 };
 
+
 // ==========================
 // PAY LATE FEE
 // ==========================
 exports.payLateFee = async (req, res) => {
   try {
     const request = await BorrowedRequest.findById(req.params.id).populate("student book");
-
     if (!request) return res.status(404).json({ success: false, message: "Request not found" });
 
     request.lateFee = 0;
     request.paid = true;
     await request.save();
 
-    // SMS sending
-    let smsSent = false;
+    // SMS
     try {
       if (request.student?.contactNumber) {
         await axios.get(SMS_GATEWAY_URL, {
@@ -207,16 +210,34 @@ exports.payLateFee = async (req, res) => {
             message: `BENEDICTO COLLEGE LIBRARY: Thank you ${request.student.firstName}, your late fee for "${request.book.title}" has been PAID.`
           }
         });
-        smsSent = true;
-        console.log("Payment confirmation SMS sent successfully");
       }
     } catch (err) {
-      console.error("SMS failed to send:", err.message);
+      console.error("SMS failed:", err.message);
     }
 
-    res.json({ success: true, message: "Late fee paid", request, smsStatus: smsSent ? "sent" : "failed" });
+    res.json({ success: true, message: "Late fee paid", request });
   } catch (error) {
     console.error("payLateFee error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// ==========================
+// MANUAL TEST OVERDUE (DEV)
+// ==========================
+exports.testOverdue = async (req, res) => {
+  try {
+    const request = await BorrowedRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ success: false, message: "Request not found" });
+
+    const oldDate = new Date();
+    oldDate.setDate(oldDate.getDate() - 5);
+    request.dueDate = oldDate;
+    await request.save();
+
+    res.json({ success: true, message: "Due date manually set to 5 days ago", request });
+  } catch (error) {
+    console.error("testOverdue error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
