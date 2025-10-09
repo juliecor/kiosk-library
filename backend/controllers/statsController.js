@@ -1,7 +1,7 @@
 // backend/controllers/statsController.js
 const Book = require("../models/book");
 const Student = require("../models/student");
-const BorrowedRequest = require("../models/BorrowedRequest");
+const BorrowedRequest = require("../models/borrowedRequest");
 
 exports.getDashboardStats = async (req, res) => {
   try {
@@ -17,7 +17,7 @@ exports.getDashboardStats = async (req, res) => {
     approvedRequests.forEach(request => {
       const borrowDate = new Date(request.borrowDate || request.createdAt);
       const dueDate = new Date(borrowDate);
-      dueDate.setDate(dueDate.getDate() + 7);
+      dueDate.setDate(dueDate.getDate() + 1);
       
       if (now > dueDate) {
         overdueCount++;
