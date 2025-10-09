@@ -4,7 +4,7 @@ const Student = require("../models/student");
 const Book = require("../models/book");
 const axios = require("axios");
 
-const SMS_GATEWAY_URL = "http://192.168.1.30:8080/send"; // ✅ your gateway endpoint
+const SMS_GATEWAY_URL = "http://192.168.1.30:8080/send";
 
 // ==========================
 // CREATE BORROW REQUEST
@@ -64,7 +64,7 @@ exports.approveRequest = async (req, res) => {
 
     const now = new Date();
     const dueDate = new Date(now);
-    dueDate.setDate(now.getDate() + 1); // ✅ due in 1 day
+    dueDate.setDate(now.getDate() + 1);
 
     request.status = "approved";
     request.borrowDate = now;
@@ -133,9 +133,35 @@ exports.denyRequest = async (req, res) => {
 // ==========================
 exports.returnBook = async (req, res) => {
   try {
-    const { condition } = req.body; // ✅ librarian sends book condition
-    const request = await BorrowedRequest.findById(req.params.id).populate("student book");
-    if (!request) return res.status(404).json({ success: false, message: "Request not found" });
+    console.log("📦 Return request body:", JSON.stringify(req.body, null, 2));
+    console.log("📋 Request ID:", req.params.id);
+
+    const { bookCondition } = req.body;
+
+    if (!bookCondition) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Book condition is required" 
+      });
+    }
+
+    const request = await BorrowedRequest.findById(req.params.id)
+      .populate("student")
+      .populate("book");
+
+    if (!request) {
+      console.error("❌ Request not found:", req.params.id);
+      return res.status(404).json({ success: false, message: "Request not found" });
+    }
+
+    if (!request.book) {
+      console.error("❌ Book not found in request:", request._id);
+      return res.status(404).json({ success: false, message: "Book not found in request" });
+    }
+
+    console.log("✅ Request found:", request._id);
+    console.log("✅ Book found:", request.book.title);
+    console.log("✅ Student found:", request.student?.firstName);
 
     const now = new Date();
     const dueDate = request.dueDate ? new Date(request.dueDate) : new Date(request.borrowDate);
@@ -143,27 +169,41 @@ exports.returnBook = async (req, res) => {
 
     request.status = "returned";
     request.returnDate = now;
-    request.bookCondition = condition || "good";
+    request.bookCondition = bookCondition.toLowerCase().trim();
     request.isLate = isLate;
 
     if (isLate) {
       const daysLate = Math.ceil((now - dueDate) / (1000 * 60 * 60 * 24));
-      request.lateFee = daysLate * 5; // ₱5/day
+      request.lateFee = daysLate * 5;
     } else {
       request.lateFee = 0;
     }
 
+    console.log(" Saving request with condition:", request.bookCondition);
     await request.save();
+    console.log("✅ Request saved successfully");
 
-    // ✅ Only restock the book if it's not lost or damaged
-    if (condition === "good") {
-      await Book.findByIdAndUpdate(request.book._id, { $inc: { availableCopies: 1 } });
-    } else if (condition === "lost") {
-      await Book.findByIdAndUpdate(request.book._id, { $inc: { totalCopies: -1 } });
+    // ✅ Update book inventory based on condition
+    const bookId = request.book._id;
+    const cond = bookCondition.toLowerCase().trim();
+    
+    console.log("🔍 Processing condition:", cond);
+    console.log("📚 Updating book ID:", bookId);
+    
+    if (cond === "good" || cond === "damaged") {
+      console.log("✅ Incrementing availableCopies for book:", bookId);
+      await Book.findByIdAndUpdate(bookId, { $inc: { availableCopies: 1 } });
+      console.log("✅ Book availableCopies incremented");
+    } else if (cond === "lost") {
+      console.log("❌ Decrementing totalCopies (book lost) for book:", bookId);
+      await Book.findByIdAndUpdate(bookId, { $inc: { totalCopies: -1 } });
+      console.log("✅ Book totalCopies decremented");
+    } else {
+      console.warn("⚠️ Unknown condition:", cond);
     }
 
-    // SMS
-     let smsSent = false;
+    // ✅ SMS notification
+    let smsSent = false;
     try {
       if (request.student?.contactNumber) {
         const borrowDateStr = request.borrowDate.toLocaleString();
@@ -175,7 +215,6 @@ exports.returnBook = async (req, res) => {
           }
         });
         smsSent = true;
-        console.log("Return SMS sent successfully");
       }
     } catch (err) {
       console.error("SMS failed to send:", err.message);
@@ -187,7 +226,6 @@ exports.returnBook = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
 
 // ==========================
 // PAY LATE FEE
