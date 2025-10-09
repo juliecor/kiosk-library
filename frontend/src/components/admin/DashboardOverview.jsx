@@ -44,11 +44,13 @@ function DashboardOverview({ statsCards, recentActivity, setActiveSection }) {
               <span className="admin-action-icon">👥</span>
               <span className="admin-action-text">Register Student</span>
             </button>
-            <button className="admin-quick-action-btn admin-action-yellow">
-              <span className="admin-action-icon">📖</span>
+            <button className="admin-quick-action-btn admin-action-yellow"
+             onClick={() => setActiveSection('requests')}>
+              <span className="admin-action-icon" >📖</span>
               <span className="admin-action-text">Process Request</span>
             </button>
-            <button className="admin-quick-action-btn admin-action-blue-dark">
+            <button className="admin-quick-action-btn admin-action-blue-dark"
+             onClick={() => setActiveSection('reports')}>
               <span className="admin-action-icon">📊</span>
               <span className="admin-action-text">View Reports</span>
             </button>
