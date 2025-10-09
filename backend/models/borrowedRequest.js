@@ -1,5 +1,4 @@
 // models/BorrowedRequest.js
-
 const mongoose = require("mongoose");
 
 const BorrowedRequestSchema = new mongoose.Schema(
@@ -19,22 +18,23 @@ const BorrowedRequestSchema = new mongoose.Schema(
       enum: ["pending", "approved", "denied", "returned"],
       default: "pending",
     },
-    borrowDate: {
-      type: Date,
+    borrowDate: { type: Date },
+    dueDate: { type: Date },
+    returnDate: { type: Date },
+    lateFee: { type: Number, default: 0 },
+    paid: { type: Boolean, default: false }, // ✅ keep existing
+
+    // 🆕 New fields for book condition and lateness
+    bookCondition: {
+      type: String,
+      enum: ["good", "damaged", "lost"],
+      default: "good",
     },
-    returnDate: {
-      type: Date,
-    },
-    lateFee: {
-      type: Number,
-      default: 0,
-    },
-    paid: {
-      type: Boolean,
-      default: false,
-    },
+    isLate: { type: Boolean, default: false }, // ✅ new field for overdue tracking
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("BorrowedRequest", BorrowedRequestSchema);
+module.exports =
+  mongoose.models.BorrowedRequest ||
+  mongoose.model("BorrowedRequest", BorrowedRequestSchema);
