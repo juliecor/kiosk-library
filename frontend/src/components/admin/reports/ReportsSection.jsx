@@ -180,11 +180,11 @@ function ReportsSection() {
             {overdueBooks.map(item => (
               <tr key={item.requestId}>
                 <td>{item.book.title}</td>
-                <td>{item.student.fullName}</td>
+                <td>{item.student.firstName} {item.student.middleName} {item.student.lastName}</td>
                 <td>{new Date(item.borrowDate).toLocaleDateString()}</td>
                 <td>{new Date(item.dueDate).toLocaleDateString()}</td>
                 <td>{item.daysOverdue}</td>
-                <td>${item.potentialFee}</td>
+                <td>₱{item.potentialFee}</td>
               </tr>
             ))}
           </tbody>
