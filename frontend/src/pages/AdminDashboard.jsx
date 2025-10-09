@@ -107,7 +107,7 @@ const handleCloseHistory = () => {
     },
     'College': {
       levels: ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-      courses: ['BSIT', 'BMMA', 'BSED', 'BSCS']
+      courses: ['BSIT', 'BMMA', 'BSED', 'BSCS','BSCA','BSTM','BSOA','BEED']
     }
   };
 
