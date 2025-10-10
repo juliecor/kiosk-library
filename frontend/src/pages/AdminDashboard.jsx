@@ -8,6 +8,7 @@ import StudentSection from "../components/admin/students/StudentSection";
 import BookSection from "../components/admin/books/BookSection";
 import BorrowRequestsSection from "../components/admin/requests/BorrowRequestsSection";
 import ReportsSection from "../components/admin/reports/ReportsSection";
+import InventorySection from '../components/admin/inventory/InventorySection';
 
 
 
@@ -538,7 +539,9 @@ const handleCloseHistory = () => {
     { id: 'books', label: 'Books', icon: '📚' },
     { id: 'students', label: 'Students', icon: '👥' },
     { id: 'requests', label: 'Borrow Requests', icon: '📖' },
+    { id: 'inventory', label: 'Inventory', icon: '📦' },
     { id: 'reports', label: 'Reports', icon: '📊' },
+   
   ];
 
   // UPDATED: Dynamic statsCards using real data from API
@@ -704,9 +707,10 @@ const handleCloseHistory = () => {
 
         
         
-                            {activeSection === 'reports' && (
+                  {activeSection === 'reports' && (
                     <ReportsSection />
                   )}
+                  {activeSection === 'inventory' && <InventorySection />}
 
                   {activeSection !== 'dashboard' && activeSection !== 'students' && activeSection !== 'books' && activeSection !== 'requests' && activeSection !== 'reports' && (
                     <div className="admin-placeholder-section">
