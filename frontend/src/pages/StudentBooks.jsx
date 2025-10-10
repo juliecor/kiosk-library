@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import toast, { Toaster } from 'react-hot-toast';
 import "./StudentBooks.css";
 import bclogo from "../assets/bclogo.jpg";
 import BookDetailsModal from "../components/admin/students/BookDetailsModal";
@@ -33,6 +34,10 @@ export default function StudentBooks() {
       }
     } catch (error) {
       console.error("Error fetching books:", error);
+      toast.error("Failed to load books. Please try again.", {
+        duration: 4000,
+        position: 'top-center',
+      });
       setBooks([]);
     } finally {
       setLoading(false);
@@ -75,9 +80,18 @@ export default function StudentBooks() {
 
   const handleBorrowConfirm = async () => {
     if (!studentId.trim()) {
-      alert("Please enter your Student ID.");
+      toast.error("Please enter your Student ID", {
+        duration: 3000,
+        position: 'top-center',
+        icon: '⚠️',
+      });
       return;
     }
+
+    // Show loading toast
+    const loadingToast = toast.loading('Submitting your request...', {
+      position: 'top-center',
+    });
 
     try {
       await axios.post("http://localhost:5000/api/borrow/request", {
@@ -85,14 +99,72 @@ export default function StudentBooks() {
         bookId: selectedBook._id,
       });
 
-      alert("Borrow request submitted successfully!");
+      // Dismiss loading and show success
+      toast.dismiss(loadingToast);
+      toast.success(
+        `Borrow request submitted successfully!\n"${selectedBook.title}" - Pending approval`,
+        {
+          duration: 5000,
+          position: 'top-center',
+          icon: '✅',
+          style: {
+            borderRadius: '10px',
+            background: '#10b981',
+            color: '#fff',
+            fontSize: '15px',
+            fontWeight: '500',
+            padding: '16px 24px',
+          },
+        }
+      );
+
       setShowPopup(false);
       setStudentId("");
       setSelectedBook(null);
       fetchBooks();
     } catch (error) {
+      // Dismiss loading toast
+      toast.dismiss(loadingToast);
+      
       console.error("Error submitting borrow request:", error);
-      alert(error.response?.data?.message || "Failed to submit borrow request.");
+      
+      const errorMessage = error.response?.data?.message || "Failed to submit borrow request";
+      const currentBook = error.response?.data?.currentBook;
+
+      // Show error toast with book info if available
+      if (currentBook) {
+        toast.error(
+          `Cannot borrow book!\nYou must return "${currentBook}" first.`,
+          {
+            duration: 6000,
+            position: 'top-center',
+            icon: '🚫',
+            style: {
+              borderRadius: '10px',
+              background: '#ef4444',
+              color: '#fff',
+              fontSize: '15px',
+              fontWeight: '500',
+              padding: '16px 24px',
+              maxWidth: '500px',
+            },
+          }
+        );
+      } else {
+        toast.error(errorMessage, {
+          duration: 4000,
+          position: 'top-center',
+          icon: '❌',
+          style: {
+            borderRadius: '10px',
+            background: '#ef4444',
+            color: '#fff',
+            fontSize: '15px',
+            fontWeight: '500',
+            padding: '16px 24px',
+          },
+        });
+      }
     }
   };
 
@@ -107,6 +179,11 @@ export default function StudentBooks() {
     setFilterShelf("");
     setFilterYear("");
     setSortBy("");
+    toast.success('Filters reset successfully', {
+      duration: 2000,
+      position: 'bottom-center',
+      icon: '🔄',
+    });
   };
 
   // Unique filter options
@@ -115,6 +192,24 @@ export default function StudentBooks() {
 
   return (
     <div className="student-books-container">
+      {/* Toast Container */}
+      <Toaster
+        toastOptions={{
+          success: {
+            style: {
+              background: '#10b981',
+              color: '#fff',
+            },
+          },
+          error: {
+            style: {
+              background: '#ef4444',
+              color: '#fff',
+            },
+          },
+        }}
+      />
+
       <div className="student-books-header">
         <h1 className="student-books-title">BENEDICTO COLLEGE LIBRARY BOOKS</h1>
       </div>
