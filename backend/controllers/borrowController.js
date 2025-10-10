@@ -24,6 +24,21 @@ exports.createBorrowRequest = async (req, res) => {
     if (!book) return res.status(404).json({ success: false, message: "Book not found" });
     if (book.availableCopies <= 0) return res.status(400).json({ success: false, message: "No copies available" });
 
+    // ✅ CHECK IF STUDENT HAS AN UNRETURNED BOOK
+    const unreturnedBook = await BorrowedRequest.findOne({
+      student: student._id,
+      status: { $in: ["approved", "pending"] }, // Check both approved and pending requests
+      returnDate: null
+    }).populate("book");
+
+    if (unreturnedBook) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Cannot borrow. You must return "${unreturnedBook.book.title}" first before borrowing another book.`,
+        currentBook: unreturnedBook.book.title
+      });
+    }
+
     const request = await BorrowedRequest.create({
       student: student._id,
       book: book._id,
@@ -61,6 +76,22 @@ exports.approveRequest = async (req, res) => {
   try {
     const request = await BorrowedRequest.findById(req.params.id).populate("student book");
     if (!request) return res.status(404).json({ success: false, message: "Request not found" });
+
+    // ✅ DOUBLE-CHECK BEFORE APPROVAL: Student shouldn't have another approved book
+    const existingBorrow = await BorrowedRequest.findOne({
+      student: request.student._id,
+      status: "approved",
+      returnDate: null,
+      _id: { $ne: request._id } // Exclude current request
+    }).populate("book");
+
+    if (existingBorrow) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot approve. Student already has an unreturned book: "${existingBorrow.book.title}"`,
+        existingBook: existingBorrow.book.title
+      });
+    }
 
     const now = new Date();
     const dueDate = new Date(now);
@@ -179,7 +210,7 @@ exports.returnBook = async (req, res) => {
       request.lateFee = 0;
     }
 
-    console.log(" Saving request with condition:", request.bookCondition);
+    console.log("💾 Saving request with condition:", request.bookCondition);
     await request.save();
     console.log("✅ Request saved successfully");
 
@@ -256,6 +287,50 @@ exports.payLateFee = async (req, res) => {
     res.json({ success: true, message: "Late fee paid", request });
   } catch (error) {
     console.error("payLateFee error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// ==========================
+// CHECK STUDENT ELIGIBILITY (Optional - for frontend)
+// ==========================
+exports.checkBorrowEligibility = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    
+    const student = await Student.findOne({ studentId });
+    if (!student) {
+      return res.status(404).json({ success: false, message: "Student not found" });
+    }
+
+    const unreturnedBook = await BorrowedRequest.findOne({
+      student: student._id,
+      status: { $in: ["approved", "pending"] },
+      returnDate: null
+    }).populate("book");
+
+    if (unreturnedBook) {
+      return res.json({
+        success: true,
+        canBorrow: false,
+        message: `Student has an unreturned book: "${unreturnedBook.book.title}"`,
+        currentBook: {
+          title: unreturnedBook.book.title,
+          borrowDate: unreturnedBook.borrowDate,
+          dueDate: unreturnedBook.dueDate,
+          status: unreturnedBook.status
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      canBorrow: true,
+      message: "Student can borrow a book"
+    });
+
+  } catch (error) {
+    console.error("checkBorrowEligibility error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
