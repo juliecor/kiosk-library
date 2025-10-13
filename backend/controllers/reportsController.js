@@ -1,7 +1,7 @@
 // backend/controllers/reportsController.js
-const Book = require("../models/Book");
+const Book = require("../models/book");
 const Student = require("../models/student");
-const BorrowedRequest = require("../models/BorrowedRequest");
+const BorrowedRequest = require("../models/borrowedRequest");
 
 /**
  * Get most borrowed books

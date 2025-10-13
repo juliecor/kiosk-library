@@ -4,7 +4,7 @@ const Student = require("../models/student");
 const Book = require("../models/book");
 const axios = require("axios");
 
-const SMS_GATEWAY_URL = "http://192.168.1.30:8080/send";
+const SMS_GATEWAY_URL = "http://192.168.1.2:8080/send";
 
 // ==========================
 // CREATE BORROW REQUEST
