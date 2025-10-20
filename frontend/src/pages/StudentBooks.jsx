@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import toast, { Toaster } from 'react-hot-toast';
+import { useNavigate } from "react-router-dom";
 import "./StudentBooks.css";
 import bclogo from "../assets/bclogo.jpg";
 import BookDetailsModal from "../components/admin/students/BookDetailsModal";
 
 export default function StudentBooks() {
+  const navigate = useNavigate();
   const [books, setBooks] = useState([]);
   const [search, setSearch] = useState("");
   const [selectedBook, setSelectedBook] = useState(null);
@@ -13,15 +15,56 @@ export default function StudentBooks() {
   const [showPopup, setShowPopup] = useState(false);
   const [loading, setLoading] = useState(true);
   const [viewingBook, setViewingBook] = useState(null);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+
+  // NEW STATES for two-step modal
+  const [showTerms, setShowTerms] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // NEW STATES for filters/sorting
   const [filterShelf, setFilterShelf] = useState("");
   const [filterYear, setFilterYear] = useState("");
   const [sortBy, setSortBy] = useState("");
 
+  // Inactivity timer
+  const inactivityTimerRef = useRef(null);
+  const INACTIVITY_TIMEOUT = 120000; // 2 minutes in milliseconds
+
   useEffect(() => {
     fetchBooks();
+    startInactivityTimer();
+
+    // Add event listeners for activity
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'mousemove'];
+    events.forEach(event => {
+      window.addEventListener(event, resetInactivityTimer);
+    });
+
+    return () => {
+      // Cleanup
+      clearTimeout(inactivityTimerRef.current);
+      events.forEach(event => {
+        window.removeEventListener(event, resetInactivityTimer);
+      });
+    };
   }, []);
+
+  const startInactivityTimer = () => {
+    inactivityTimerRef.current = setTimeout(() => {
+      toast.loading('Returning to home page...', {
+        duration: 2000,
+        position: 'top-center',
+      });
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
+    }, INACTIVITY_TIMEOUT);
+  };
+
+  const resetInactivityTimer = () => {
+    clearTimeout(inactivityTimerRef.current);
+    startInactivityTimer();
+  };
 
   const fetchBooks = async () => {
     setLoading(true);
@@ -68,6 +111,9 @@ export default function StudentBooks() {
   const handleBorrowClick = (book) => {
     setSelectedBook(book);
     setShowPopup(true);
+    setShowTerms(false); // Start at step 1
+    setAgreedToTerms(false); // Reset agreement
+    setFailedAttempts(0); // Reset attempts when opening new borrow request
   };
 
   const handlePreviewClick = (book) => {
@@ -78,9 +124,28 @@ export default function StudentBooks() {
     setViewingBook(null);
   };
 
-  const handleBorrowConfirm = async () => {
+  // NEW: Handle moving from step 1 to step 2
+  const handleNextToTerms = () => {
     if (!studentId.trim()) {
       toast.error("Please enter your Student ID", {
+        duration: 3000,
+        position: 'top-center',
+        icon: '⚠️',
+      });
+      return;
+    }
+    setShowTerms(true); // Move to step 2
+  };
+
+  // NEW: Handle going back from step 2 to step 1
+  const handleBackToId = () => {
+    setShowTerms(false);
+    setAgreedToTerms(false);
+  };
+
+  const handleBorrowConfirm = async () => {
+    if (!agreedToTerms) {
+      toast.error("Please agree to the borrowing guidelines", {
         duration: 3000,
         position: 'top-center',
         icon: '⚠️',
@@ -99,28 +164,39 @@ export default function StudentBooks() {
         bookId: selectedBook._id,
       });
 
-      // Dismiss loading and show success
+      // Dismiss loading
       toast.dismiss(loadingToast);
+      
+      // Close popup immediately
+      setShowPopup(false);
+      setStudentId("");
+      setSelectedBook(null);
+      setShowTerms(false);
+      setAgreedToTerms(false);
+
+      // Show success message
       toast.success(
-        `Borrow request submitted successfully!\n"${selectedBook.title}" - Pending approval`,
+        `🎉 SUCCESS!\n\nBook borrowed successfully!\nReturning to home page...`,
         {
-          duration: 5000,
+          duration: 3000,
           position: 'top-center',
-          icon: '✅',
           style: {
-            borderRadius: '10px',
+            borderRadius: '16px',
             background: '#10b981',
             color: '#fff',
-            fontSize: '15px',
-            fontWeight: '500',
-            padding: '16px 24px',
+            fontSize: '18px',
+            fontWeight: 'bold',
+            padding: '24px 32px',
+            textAlign: 'center',
           },
         }
       );
 
-      setShowPopup(false);
-      setStudentId("");
-      setSelectedBook(null);
+      // Auto-return to landing page after 3 seconds
+      setTimeout(() => {
+        navigate('/');
+      }, 3000);
+
       fetchBooks();
     } catch (error) {
       // Dismiss loading toast
@@ -131,40 +207,84 @@ export default function StudentBooks() {
       const errorMessage = error.response?.data?.message || "Failed to submit borrow request";
       const currentBook = error.response?.data?.currentBook;
 
-      // Show error toast with book info if available
-      if (currentBook) {
+      // Increment failed attempts
+      const newAttempts = failedAttempts + 1;
+      setFailedAttempts(newAttempts);
+
+      // Check if max attempts reached
+      if (newAttempts >= 3) {
         toast.error(
-          `Cannot borrow book!\nYou must return "${currentBook}" first.`,
+          `😟 Too many failed attempts!\n\nPlease ask a librarian for help.\nReturning to home page...`,
           {
-            duration: 6000,
+            duration: 3000,
             position: 'top-center',
-            icon: '🚫',
             style: {
-              borderRadius: '10px',
+              borderRadius: '16px',
               background: '#ef4444',
               color: '#fff',
-              fontSize: '15px',
-              fontWeight: '500',
-              padding: '16px 24px',
+              fontSize: '18px',
+              fontWeight: 'bold',
+              padding: '24px 32px',
+              textAlign: 'center',
+            },
+          }
+        );
+
+        // Close popup
+        setShowPopup(false);
+        setStudentId("");
+        setSelectedBook(null);
+        setShowTerms(false);
+        setAgreedToTerms(false);
+
+        // Auto-return to landing page after 3 seconds
+        setTimeout(() => {
+          navigate('/');
+        }, 3000);
+        
+        return;
+      }
+
+      // Show error toast with remaining attempts
+      if (currentBook) {
+        toast.error(
+          `🚫 Cannot borrow!\n\nYou must return "${currentBook}" first.\n\nAttempts left: ${3 - newAttempts}`,
+          {
+            duration: 5000,
+            position: 'top-center',
+            style: {
+              borderRadius: '12px',
+              background: '#ef4444',
+              color: '#fff',
+              fontSize: '16px',
+              fontWeight: '600',
+              padding: '20px 28px',
               maxWidth: '500px',
             },
           }
         );
       } else {
-        toast.error(errorMessage, {
-          duration: 4000,
-          position: 'top-center',
-          icon: '❌',
-          style: {
-            borderRadius: '10px',
-            background: '#ef4444',
-            color: '#fff',
-            fontSize: '15px',
-            fontWeight: '500',
-            padding: '16px 24px',
-          },
-        });
+        toast.error(
+          `❌ ${errorMessage}\n\nAttempts left: ${3 - newAttempts}\nPlease try again.`,
+          {
+            duration: 5000,
+            position: 'top-center',
+            style: {
+              borderRadius: '12px',
+              background: '#ef4444',
+              color: '#fff',
+              fontSize: '16px',
+              fontWeight: '600',
+              padding: '20px 28px',
+            },
+          }
+        );
       }
+
+      // Go back to step 1 for retry
+      setShowTerms(false);
+      setAgreedToTerms(false);
+      setStudentId("");
     }
   };
 
@@ -172,6 +292,9 @@ export default function StudentBooks() {
     setShowPopup(false);
     setStudentId("");
     setSelectedBook(null);
+    setFailedAttempts(0);
+    setShowTerms(false);
+    setAgreedToTerms(false);
   };
 
   const handleResetFilters = () => {
@@ -183,6 +306,17 @@ export default function StudentBooks() {
       duration: 2000,
       position: 'bottom-center',
       icon: '🔄',
+    });
+  };
+
+  // Calculate due date (1 day from now)
+  const calculateDueDate = () => {
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
     });
   };
 
@@ -319,8 +453,8 @@ export default function StudentBooks() {
         </div>
       )}
 
-      {/* Borrow Popup */}
-      {showPopup && selectedBook && (
+      {/* Borrow Popup - STEP 1: Enter Student ID */}
+      {showPopup && selectedBook && !showTerms && (
         <div className="student-popup" onClick={handleClosePopup}>
           <div className="student-popup-content" onClick={(e) => e.stopPropagation()}>
             <button className="close-btn" onClick={handleClosePopup}>×</button>
@@ -337,7 +471,14 @@ export default function StudentBooks() {
             </div>
 
             <div className="input-group">
-              <label htmlFor="studentId">ENTER STUDENT ID</label>
+              <label htmlFor="studentId">
+                ENTER STUDENT ID
+                {failedAttempts > 0 && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginLeft: '8px' }}>
+                    (Attempts left: {3 - failedAttempts})
+                  </span>
+                )}
+              </label>
               <input
                 id="studentId"
                 type="text"
@@ -345,12 +486,126 @@ export default function StudentBooks() {
                 onChange={(e) => setStudentId(e.target.value)}
                 className="student-id-input"
                 autoFocus
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    handleNextToTerms();
+                  }
+                }}
               />
             </div>
 
             <div className="popup-buttons">
-              <button onClick={handleBorrowConfirm} className="confirm-btn">Confirm Request</button>
+              <button onClick={handleNextToTerms} className="confirm-btn">Next →</button>
               <button onClick={handleClosePopup} className="cancel-btn">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Borrow Popup - STEP 2: Terms & Guidelines */}
+      {showPopup && selectedBook && showTerms && (
+        <div className="student-popup" onClick={handleClosePopup}>
+          <div className="student-popup-content terms-popup" onClick={(e) => e.stopPropagation()}>
+            <button className="close-btn" onClick={handleClosePopup}>×</button>
+
+            <div className="popup-header">
+              <img src={bclogo} alt="School Logo" className="popup-icon" />
+              <h2>Borrowing Guidelines</h2>
+            </div>
+
+            <div className="terms-container">
+              <div className="terms-book-info">
+                <p className="terms-label">Book:</p>
+                <p className="terms-book-title">{selectedBook.title}</p>
+                <p className="terms-book-author">by {selectedBook.author}</p>
+              </div>
+
+              <div className="terms-details">
+                <div className="terms-detail-item">
+                  <span className="terms-icon">👤</span>
+                  <div>
+                    <strong>Student ID:</strong>
+                    <p>{studentId}</p>
+                  </div>
+                </div>
+                <div className="terms-detail-item">
+                  <span className="terms-icon">📅</span>
+                  <div>
+                    <strong>Loan Period:</strong>
+                    <p>1 day</p>
+                  </div>
+                </div>
+                <div className="terms-detail-item">
+                  <span className="terms-icon">⏰</span>
+                  <div>
+                    <strong>Due Date:</strong>
+                    <p>{calculateDueDate()}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="terms-divider"></div>
+
+              <div className="terms-guidelines">
+                <h3>📋 Borrowing Guidelines:</h3>
+                
+                <div className="guideline-item">
+                  <span className="guideline-icon">⏱️</span>
+                  <div>
+                    <strong>Late Returns:</strong>
+                    <p>₱5 per day overdue</p>
+                  </div>
+                </div>
+
+                <div className="guideline-item">
+                  <span className="guideline-icon">📖</span>
+                  <div>
+                    <strong>Damaged Books:</strong>
+                    <p>₱50-₱500 (depending on damage level)</p>
+                  </div>
+                </div>
+
+                <div className="guideline-item">
+                  <span className="guideline-icon">❌</span>
+                  <div>
+                    <strong>Lost Books:</strong>
+                    <p>Full replacement cost</p>
+                  </div>
+                </div>
+
+                <div className="guideline-item">
+                  <span className="guideline-icon">📱</span>
+                  <div>
+                    <strong>Notifications:</strong>
+                    <p>You'll receive SMS reminders about due dates and fees</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="terms-agreement">
+                <label className="checkbox-container">
+                  <input
+                    type="checkbox"
+                    checked={agreedToTerms}
+                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                  />
+                  <span className="checkmark"></span>
+                  <span className="agreement-text">
+                    I agree to return the book on time and in good condition
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="popup-buttons">
+              <button onClick={handleBackToId} className="cancel-btn">← Back</button>
+              <button 
+                onClick={handleBorrowConfirm} 
+                className={`confirm-btn ${!agreedToTerms ? 'disabled' : ''}`}
+                disabled={!agreedToTerms}
+              >
+                Confirm Borrow
+              </button>
             </div>
           </div>
         </div>

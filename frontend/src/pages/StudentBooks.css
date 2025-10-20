@@ -418,6 +418,286 @@
   z-index: 1000;
   animation: fadeIn 0.2s;
 }
+/* ===== TWO-STEP MODAL: TERMS & GUIDELINES ===== */
+
+.terms-popup {
+  max-width: 600px !important;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.terms-container {
+  padding: 20px 0;
+}
+
+.terms-book-info {
+  background: rgba(249, 250, 251, 0.95);
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.terms-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0 0 8px 0;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.terms-book-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 4px 0;
+}
+
+.terms-book-author {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.terms-details {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.terms-detail-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(249, 250, 251, 0.95);
+  border-radius: 8px;
+  border: 1px solid rgba(229, 231, 235, 0.5);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.terms-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.terms-detail-item strong {
+  display: block;
+  font-size: 13px;
+  color: #1e1e1e;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.terms-detail-item p {
+  margin: 0;
+  font-size: 15px;
+  color: #050505;
+  font-weight: 500;
+}
+
+.terms-divider {
+  height: 2px;
+  background: linear-gradient(to right, rgba(229, 231, 235, 0.5), rgba(209, 213, 219, 0.8), rgba(229, 231, 235, 0.5));
+  margin: 24px 0;
+  border-radius: 2px;
+}
+
+.terms-guidelines {
+  margin-bottom: 24px;
+}
+
+.terms-guidelines h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #131415;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.guideline-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(243, 244, 246, 0.5);
+}
+
+.guideline-item:last-child {
+  border-bottom: none;
+}
+
+.guideline-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.guideline-item strong {
+  display: block;
+  font-size: 14px;
+  color: #0c0d0d;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.guideline-item p {
+  margin: 0;
+  font-size: 15px;
+  color: #0a0a0a;
+  line-height: 1.5;
+}
+
+.terms-agreement {
+  background: rgba(254, 243, 199, 0.95);
+  border: 2px solid #fbbf24;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 20px;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.2);
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  position: relative;
+  padding-left: 32px;
+}
+
+.checkbox-container input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkmark {
+  position: absolute;
+  left: 0;
+  height: 22px;
+  width: 22px;
+  background-color: white;
+  border: 2px solid #d97706;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.checkbox-container:hover .checkmark {
+  background-color: #fef3c7;
+}
+
+.checkbox-container input:checked ~ .checkmark {
+  background-color: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.checkmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+  left: 7px;
+  top: 3px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.checkbox-container input:checked ~ .checkmark:after {
+  display: block;
+}
+
+.agreement-text {
+  font-size: 14px;
+  color: #92400e;
+  font-weight: 600;
+  line-height: 1.5;
+  user-select: none;
+}
+
+/* Disabled button state for terms */
+.confirm-btn.disabled {
+  background: #9ca3af !important;
+  cursor: not-allowed !important;
+  opacity: 0.6;
+}
+
+.confirm-btn.disabled:hover {
+  background: #9ca3af !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Scrollbar styling for terms modal */
+.terms-popup::-webkit-scrollbar {
+  width: 8px;
+}
+
+.terms-popup::-webkit-scrollbar-track {
+  background: rgba(241, 241, 241, 0.5);
+  border-radius: 10px;
+}
+
+.terms-popup::-webkit-scrollbar-thumb {
+  background: rgba(203, 213, 225, 0.8);
+  border-radius: 10px;
+}
+
+.terms-popup::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.9);
+}
+
+/* Mobile responsive for terms modal */
+@media (max-width: 768px) {
+  .terms-popup {
+    max-width: 95% !important;
+    padding: 20px !important;
+  }
+
+  .terms-book-title {
+    font-size: 18px;
+  }
+
+  .terms-details {
+    gap: 8px;
+  }
+
+  .terms-detail-item {
+    padding: 10px;
+  }
+
+  .guideline-item {
+    padding: 10px 0;
+  }
+
+  .checkbox-container {
+    padding-left: 28px;
+  }
+
+  .checkmark {
+    height: 20px;
+    width: 20px;
+  }
+
+  .checkmark:after {
+    left: 6px;
+    top: 2px;
+    width: 4px;
+    height: 9px;
+  }
+
+  .agreement-text {
+    font-size: 13px;
+  }
+}
 
 @keyframes fadeIn {
   from { opacity: 0; }

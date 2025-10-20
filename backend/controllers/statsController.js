@@ -42,7 +42,9 @@ exports.getDashboardStats = async (req, res) => {
     const allBooks = await Book.find({ isDeleted: false });
     const totalCopies = allBooks.reduce((sum, book) => sum + book.totalCopies, 0);
     const availableCopies = allBooks.reduce((sum, book) => sum + book.availableCopies, 0);
-    const borrowedCopies = totalCopies - availableCopies;
+    
+    // FIXED: Count actual approved borrows instead of calculating from inventory
+    const borrowedCopies = await BorrowedRequest.countDocuments({ status: "approved" });
 
     res.json({
       success: true,

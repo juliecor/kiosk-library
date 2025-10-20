@@ -1,4 +1,4 @@
-// controllers/borrowController.js
+// backend/controllers/borrowController.js
 const BorrowedRequest = require("../models/borrowedRequest");
 const Student = require("../models/student");
 const Book = require("../models/book");
@@ -24,10 +24,9 @@ exports.createBorrowRequest = async (req, res) => {
     if (!book) return res.status(404).json({ success: false, message: "Book not found" });
     if (book.availableCopies <= 0) return res.status(400).json({ success: false, message: "No copies available" });
 
-    // ✅ CHECK IF STUDENT HAS AN UNRETURNED BOOK
     const unreturnedBook = await BorrowedRequest.findOne({
       student: student._id,
-      status: { $in: ["approved", "pending"] }, // Check both approved and pending requests
+      status: { $in: ["approved", "pending"] },
       returnDate: null
     }).populate("book");
 
@@ -77,12 +76,11 @@ exports.approveRequest = async (req, res) => {
     const request = await BorrowedRequest.findById(req.params.id).populate("student book");
     if (!request) return res.status(404).json({ success: false, message: "Request not found" });
 
-    // ✅ DOUBLE-CHECK BEFORE APPROVAL: Student shouldn't have another approved book
     const existingBorrow = await BorrowedRequest.findOne({
       student: request.student._id,
       status: "approved",
       returnDate: null,
-      _id: { $ne: request._id } // Exclude current request
+      _id: { $ne: request._id }
     }).populate("book");
 
     if (existingBorrow) {
@@ -90,6 +88,15 @@ exports.approveRequest = async (req, res) => {
         success: false,
         message: `Cannot approve. Student already has an unreturned book: "${existingBorrow.book.title}"`,
         existingBook: existingBorrow.book.title
+      });
+    }
+
+    // Pre-check: Make sure book has available copies
+    const book = await Book.findById(request.book._id);
+    if (book.availableCopies <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No copies available for this book"
       });
     }
 
@@ -104,7 +111,6 @@ exports.approveRequest = async (req, res) => {
 
     await Book.findByIdAndUpdate(request.book._id, { $inc: { availableCopies: -1 } });
 
-    // SMS sending
     let smsSent = false;
     try {
       if (request.student?.contactNumber) {
@@ -138,7 +144,6 @@ exports.denyRequest = async (req, res) => {
     request.status = "denied";
     await request.save();
 
-    // SMS
     try {
       if (request.student?.contactNumber) {
         await axios.get(SMS_GATEWAY_URL, {
@@ -160,20 +165,22 @@ exports.denyRequest = async (req, res) => {
 };
 
 // ==========================
-// RETURN BOOK
+// RETURN BOOK WITH FIXED DAMAGE FEE HANDLING
 // ==========================
 exports.returnBook = async (req, res) => {
   try {
     console.log("📦 Return request body:", JSON.stringify(req.body, null, 2));
     console.log("📋 Request ID:", req.params.id);
 
-    const { bookCondition } = req.body;
+    const { bookCondition, damageLevel, damageDescription, damageFee } = req.body;
 
+    // Validation
     if (!bookCondition) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Book condition is required" 
-      });
+      return res.status(400).json({ success: false, message: "Book condition is required" });
+    }
+
+    if (bookCondition === "damaged" && !damageDescription) {
+      return res.status(400).json({ success: false, message: "Damage description is required for damaged books" });
     }
 
     const request = await BorrowedRequest.findById(req.params.id)
@@ -181,68 +188,115 @@ exports.returnBook = async (req, res) => {
       .populate("book");
 
     if (!request) {
-      console.error("❌ Request not found:", req.params.id);
       return res.status(404).json({ success: false, message: "Request not found" });
     }
 
     if (!request.book) {
-      console.error("❌ Book not found in request:", request._id);
       return res.status(404).json({ success: false, message: "Book not found in request" });
     }
 
     console.log("✅ Request found:", request._id);
     console.log("✅ Book found:", request.book.title);
-    console.log("✅ Student found:", request.student?.firstName);
+    console.log("✅ Condition:", bookCondition);
 
     const now = new Date();
     const dueDate = request.dueDate ? new Date(request.dueDate) : new Date(request.borrowDate);
     const isLate = now > dueDate;
 
-    request.status = "returned";
-    request.returnDate = now;
-    request.bookCondition = bookCondition.toLowerCase().trim();
-    request.isLate = isLate;
-
+    // Calculate late fee
+    let lateFee = 0;
     if (isLate) {
       const daysLate = Math.ceil((now - dueDate) / (1000 * 60 * 60 * 24));
-      request.lateFee = daysLate * 5;
-    } else {
-      request.lateFee = 0;
+      lateFee = daysLate * 5;
     }
 
-    console.log("💾 Saving request with condition:", request.bookCondition);
+    // Update request with all information
+    request.status = "returned";
+    request.returnDate = now;
+    request.returnedAt = now;
+    request.bookCondition = bookCondition.toLowerCase().trim();
+    request.isLate = isLate;
+    request.lateFee = lateFee;
+
+    // ✅ FIXED DAMAGE FEE LOGIC
+    if (bookCondition === "damaged") {
+      request.damageLevel = damageLevel || "minor";
+      request.damageDescription = damageDescription;
+      request.damageFee = damageFee !== undefined ? damageFee : 75; // ✅ use frontend value if sent
+    } else if (bookCondition === "lost") {
+      request.damageFee = damageFee !== undefined
+        ? damageFee
+        : (request.book.price ? request.book.price + 50 : 550);
+      request.damageDescription = "Book lost by student";
+    } else {
+      request.damageFee = 0;
+      request.damageLevel = null;
+      request.damageDescription = null;
+    }
+
+    // Calculate total fee
+    request.totalFee = request.lateFee + request.damageFee;
+
+    console.log("💰 Fees calculated:");
+    console.log("   Late Fee:", request.lateFee);
+    console.log("   Damage Fee:", request.damageFee);
+    console.log("   Total Fee:", request.totalFee);
+
     await request.save();
     console.log("✅ Request saved successfully");
 
-    // ✅ Update book inventory based on condition
+    // Inventory Logic
     const bookId = request.book._id;
-    const cond = bookCondition.toLowerCase().trim();
-    
-    console.log("🔍 Processing condition:", cond);
-    console.log("📚 Updating book ID:", bookId);
-    
-    if (cond === "good" || cond === "damaged") {
-      console.log("✅ Incrementing availableCopies for book:", bookId);
+    const cond = request.bookCondition;
+
+    if (cond === "good") {
+      console.log("✅ [GOOD] Incrementing availableCopies for book:", bookId);
       await Book.findByIdAndUpdate(bookId, { $inc: { availableCopies: 1 } });
-      console.log("✅ Book availableCopies incremented");
+    } else if (cond === "damaged") {
+      console.log("⚠️ [DAMAGED] Book NOT returned to inventory - awaiting admin decision");
     } else if (cond === "lost") {
-      console.log("❌ Decrementing totalCopies (book lost) for book:", bookId);
+      console.log("❌ [LOST] Decrementing totalCopies for book:", bookId);
       await Book.findByIdAndUpdate(bookId, { $inc: { totalCopies: -1 } });
-      console.log("✅ Book totalCopies decremented");
-    } else {
-      console.warn("⚠️ Unknown condition:", cond);
     }
 
-    // ✅ SMS notification
+    // SMS Notification (unchanged)
     let smsSent = false;
     try {
       if (request.student?.contactNumber) {
-        const borrowDateStr = request.borrowDate.toLocaleString();
-        const returnDateStr = request.returnDate.toLocaleString();
+        let smsMessage = `BENEDICTO COLLEGE LIBRARY: "${request.book.title}" RETURNED.\n`;
+
+        if (cond === "damaged") {
+          smsMessage += `Status: DAMAGED (${request.damageLevel})\n`;
+          smsMessage += `Description: ${request.damageDescription}\n`;
+        } else if (cond === "lost") {
+          smsMessage += `Status: LOST - Replacement required\n`;
+        } else {
+          smsMessage += `Status: GOOD CONDITION\n`;
+        }
+
+        if (request.totalFee > 0) {
+          smsMessage += `\nFEES DUE:\n`;
+          if (request.lateFee > 0) {
+            const daysLate = Math.ceil((now - dueDate) / (1000 * 60 * 60 * 24));
+            smsMessage += `- Late Fee: PHP ${request.lateFee} (${daysLate} days)\n`;
+          }
+          if (request.damageFee > 0) {
+            if (cond === "damaged") {
+              smsMessage += `- Damage Fee: PHP ${request.damageFee} (${request.damageLevel})\n`;
+            } else if (cond === "lost") {
+              smsMessage += `- Replacement Fee: PHP ${request.damageFee}\n`;
+            }
+          }
+          smsMessage += `TOTAL: PHP ${request.totalFee}\n`;
+          smsMessage += `Please pay at the library desk.`;
+        } else {
+          smsMessage += `No fees. Thank you!`;
+        }
+
         await axios.get(SMS_GATEWAY_URL, {
           params: {
             to: request.student.contactNumber,
-            message: `BENEDICTO COLLEGE LIBRARY: "${request.book.title}" RETURNED. Borrowed: ${borrowDateStr}. Returned: ${returnDateStr}. Late fee: PHP ${request.lateFee}.`
+            message: smsMessage
           }
         });
         smsSent = true;
@@ -251,32 +305,53 @@ exports.returnBook = async (req, res) => {
       console.error("SMS failed to send:", err.message);
     }
 
-    res.json({ success: true, message: "Book marked as returned", request, smsStatus: smsSent ? "sent" : "failed" });
+    res.json({
+      success: true,
+      message: `Book marked as returned (${bookCondition})`,
+      request,
+      smsStatus: smsSent ? "sent" : "failed",
+      inventoryUpdate: {
+        condition: cond,
+        action:
+          cond === "good"
+            ? "availableCopies +1 (returned to circulation)"
+            : cond === "damaged"
+            ? "no change (awaiting admin decision via adjustStock)"
+            : "totalCopies -1 (permanently lost)"
+      },
+      fees: {
+        lateFee: request.lateFee,
+        damageFee: request.damageFee,
+        totalFee: request.totalFee
+      }
+    });
   } catch (error) {
     console.error("returnBook error:", error);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
 
 // ==========================
-// PAY LATE FEE
+// PAY FEE
 // ==========================
 exports.payLateFee = async (req, res) => {
   try {
     const request = await BorrowedRequest.findById(req.params.id).populate("student book");
     if (!request) return res.status(404).json({ success: false, message: "Request not found" });
 
-    request.lateFee = 0;
+    const totalPaid = request.totalFee;
+
+    // ✅ Just mark as paid — don't reset the fees
     request.paid = true;
     await request.save();
 
-    // SMS
+    // ✅ Optional: keep record of payment via SMS
     try {
       if (request.student?.contactNumber) {
         await axios.get(SMS_GATEWAY_URL, {
           params: {
             to: request.student.contactNumber,
-            message: `BENEDICTO COLLEGE LIBRARY: Thank you ${request.student.firstName}, your late fee for "${request.book.title}" has been PAID.`
+            message: `BENEDICTO COLLEGE LIBRARY: Thank you ${request.student.firstName}! Payment of PHP ${totalPaid} received for "${request.book.title}". All fees cleared.`
           }
         });
       }
@@ -284,15 +359,21 @@ exports.payLateFee = async (req, res) => {
       console.error("SMS failed:", err.message);
     }
 
-    res.json({ success: true, message: "Late fee paid", request });
+    res.json({
+      success: true,
+      message: "Fees marked as paid successfully",
+      request,
+      amountPaid: totalPaid
+    });
   } catch (error) {
     console.error("payLateFee error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
+
 // ==========================
-// CHECK STUDENT ELIGIBILITY (Optional - for frontend)
+// CHECK STUDENT ELIGIBILITY
 // ==========================
 exports.checkBorrowEligibility = async (req, res) => {
   try {
@@ -336,7 +417,7 @@ exports.checkBorrowEligibility = async (req, res) => {
 };
 
 // ==========================
-// MANUAL TEST OVERDUE (DEV)
+// MANUAL TEST OVERDUE
 // ==========================
 exports.testOverdue = async (req, res) => {
   try {

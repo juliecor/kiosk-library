@@ -15,4 +15,8 @@ router.put("/:id", authMiddleware, upload.single("image"), bookController.update
 router.delete("/:id", authMiddleware, bookController.deleteBook);
 router.post("/:id/restore", authMiddleware, bookController.restoreBook);
 
+// In your routes/books.js
+router.get("/api/books", bookController.getBooks);           // With pagination
+router.put("/api/books/:id/adjust", bookController.adjustStock);  // New!
+router.get("/api/books/stats", bookController.getInventoryStats); // New!
 module.exports = router;
