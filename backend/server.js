@@ -8,6 +8,7 @@ const studentRoutes = require("./routes/studentRoutes");
 const borrowRoutes = require("./routes/borrowRoutes");
 const statsRoutes = require("./routes/statsRoutes");
 const reportsRoutes = require("./routes/reportsRoutes");
+const inventoryRoutes = require('./routes/inventory');
 
 const cors = require("cors");
 
@@ -24,6 +25,7 @@ app.use('/uploads', express.static('uploads'));
 // Connect to DB
 connectDB();
 
+app.use('/api/inventory', inventoryRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/books", bookRoutes);
 app.use("/api/students", studentRoutes);
