@@ -10,8 +10,6 @@ import BorrowRequestsSection from "../components/admin/requests/BorrowRequestsSe
 import ReportsSection from "../components/admin/reports/ReportsSection";
 import InventorySection from '../components/admin/inventory/InventorySection';
 
-
-
 function AdminDashboard() {
   const [adminData, setAdminData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -26,14 +24,17 @@ function AdminDashboard() {
   const [bookSearchTerm, setBookSearchTerm] = useState('');
   const [viewingStudent, setViewingStudent] = useState(null);
   const [viewingHistory, setViewingHistory] = useState(null);
+  
+  // 🆕 NEW STATE for status management
+  const [statusUpdateLoading, setStatusUpdateLoading] = useState(null);
 
   const handleViewHistory = (studentId) => {
-  setViewingHistory(studentId);
-};
+    setViewingHistory(studentId);
+  };
 
-const handleCloseHistory = () => {
-  setViewingHistory(null);
-};
+  const handleCloseHistory = () => {
+    setViewingHistory(null);
+  };
 
   // NEW: State for dynamic statistics
   const [stats, setStats] = useState(null);
@@ -45,6 +46,48 @@ const handleCloseHistory = () => {
 
   const handleCloseStudentView = () => {
     setViewingStudent(null);
+  };
+
+  // 🆕 NEW FUNCTION: Toggle student status
+  const handleToggleStatus = async (student) => {
+    const newStatus = student.status === 'active' ? 'inactive' : 'active';
+    
+    try {
+      setStatusUpdateLoading(student.studentId);
+      
+      const token = localStorage.getItem('adminToken');
+      const response = await axios.put(
+        `http://localhost:5000/api/students/${student.studentId}/status`,
+        { status: newStatus },
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      if (response.data.success) {
+        // Update the student in the local state
+        setStudents(prevStudents =>
+          prevStudents.map(s =>
+            s.studentId === student.studentId
+              ? { ...s, status: newStatus }
+              : s
+          )
+        );
+
+        // Update viewingStudent if it's the same student
+        if (viewingStudent && viewingStudent.studentId === student.studentId) {
+          setViewingStudent({ ...viewingStudent, status: newStatus });
+        }
+
+        // Show success message
+        alert(`Student ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully!`);
+      }
+    } catch (error) {
+      console.error('Status update error:', error);
+      alert(error.response?.data?.message || 'Failed to update student status');
+    } finally {
+      setStatusUpdateLoading(null);
+    }
   };
 
   const [studentForm, setStudentForm] = useState({
@@ -144,14 +187,12 @@ const handleCloseHistory = () => {
     verifyAdmin();
   }, []);
 
-  // NEW: Fetch dashboard statistics
   useEffect(() => {
     if (activeSection === 'dashboard') {
       fetchDashboardStats();
     }
   }, [activeSection]);
 
-  // NEW: Function to fetch statistics
   const fetchDashboardStats = async () => {
     try {
       const token = localStorage.getItem('adminToken');
@@ -293,8 +334,6 @@ const handleCloseHistory = () => {
       formData.append('totalCopies', editBookForm.totalCopies);
       formData.append('availableCopies', editBookForm.availableCopies);
       formData.append("description", editBookForm.description);
-
-
       
       if (editBookForm.image) {
         formData.append('image', editBookForm.image);
@@ -541,10 +580,8 @@ const handleCloseHistory = () => {
     { id: 'requests', label: 'Borrow Requests', icon: '📖' },
     { id: 'inventory', label: 'Inventory', icon: '📦' },
     { id: 'reports', label: 'Reports', icon: '📊' },
-   
   ];
 
-  // UPDATED: Dynamic statsCards using real data from API
   const statsCards = [
     { 
       title: 'Total Books', 
@@ -576,7 +613,6 @@ const handleCloseHistory = () => {
     },
   ];
 
-  // UPDATED: Format recent activity from API data
   const getActivityText = (activity) => {
     switch (activity.status) {
       case 'pending':
@@ -668,9 +704,12 @@ const handleCloseHistory = () => {
               viewingStudent={viewingStudent}              
               handleViewStudent={handleViewStudent}        
               handleCloseStudentView={handleCloseStudentView}
-              viewingHistory={viewingHistory}              // ADD THIS
-              handleViewHistory={handleViewHistory}        // ADD THIS
-              handleCloseHistory={handleCloseHistory}      // ADD THIS
+              viewingHistory={viewingHistory}
+              handleViewHistory={handleViewHistory}
+              handleCloseHistory={handleCloseHistory}
+              // 🆕 NEW PROPS for status management
+              handleToggleStatus={handleToggleStatus}
+              statusUpdateLoading={statusUpdateLoading}
             />
           )}
 
@@ -694,7 +733,7 @@ const handleCloseHistory = () => {
               editingBook={editingBook}
               editBookForm={editBookForm}
               editImagePreview={editImagePreview}
-              handleEditBookFormChange={handleEditBookFormChange}
+              handleEditBookFormChange={handleEditBookFormFormChange}
               handleEditImageChange={handleEditImageChange}
               handleUpdateBook={handleUpdateBook}
               handleCancelEdit={handleCancelEdit}
@@ -705,27 +744,25 @@ const handleCloseHistory = () => {
             <BorrowRequestsSection />
           )}
 
-        
-        
-                  {activeSection === 'reports' && (
-                    <ReportsSection />
-                  )}
-                  {activeSection === 'inventory' && <InventorySection />}
+          {activeSection === 'reports' && (
+            <ReportsSection />
+          )}
+          
+          {activeSection === 'inventory' && <InventorySection />}
 
-                  {activeSection !== 'dashboard' && activeSection !== 'students' && activeSection !== 'books' && activeSection !== 'requests' && activeSection !== 'reports' && (
-                    <div className="admin-placeholder-section">
-                      <div className="admin-placeholder-icon">
-                        {navItems.find(item => item.id === activeSection)?.icon}
-                      </div>
-                      <h3 className="admin-placeholder-title">
-                        {navItems.find(item => item.id === activeSection)?.label} Section
-                      </h3>
-                      <p className="admin-placeholder-text">
-                        This section will contain your {activeSection} management interface.
-                      </p>
-                    </div>
-                  )}
-
+          {activeSection !== 'dashboard' && activeSection !== 'students' && activeSection !== 'books' && activeSection !== 'requests' && activeSection !== 'reports' && activeSection !== 'inventory' && (
+            <div className="admin-placeholder-section">
+              <div className="admin-placeholder-icon">
+                {navItems.find(item => item.id === activeSection)?.icon}
+              </div>
+              <h3 className="admin-placeholder-title">
+                {navItems.find(item => item.id === activeSection)?.label} Section
+              </h3>
+              <p className="admin-placeholder-text">
+                This section will contain your {activeSection} management interface.
+              </p>
+            </div>
+          )}
         </div>
       </main>
     </div>

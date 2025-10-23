@@ -1,17 +1,16 @@
 // backend/routes/studentRoutes.js
 const express = require("express");
 const Student = require("../models/student");
-const BorrowedRequest = require("../models/BorrowedRequest"); // ADDED THIS
+const BorrowedRequest = require("../models/borrowedRequest");
 const authMiddleware = require("../middleware/auth");
 
 const router = express.Router();
 
-// Register new student (Admin only)
+// Register new student (Admin only) - YOUR EXISTING CODE
 router.post("/register", authMiddleware, async (req, res) => {
   try {
     const { firstName, middleName, lastName, course, yearLevel, studentId, educationLevel, contactNumber, email } = req.body;
 
-    // Prevent duplicate student IDs
     const existingStudent = await Student.findOne({ studentId });
     if (existingStudent) {
       return res.status(400).json({ success: false, message: "Student ID already exists" });
@@ -27,6 +26,7 @@ router.post("/register", authMiddleware, async (req, res) => {
       studentId,
       contactNumber,
       email,
+      // status will default to "active" automatically
     });
 
     await student.save();
@@ -37,7 +37,7 @@ router.post("/register", authMiddleware, async (req, res) => {
   }
 });
 
-// Get all students (Admin only)
+// Get all students (Admin only) - YOUR EXISTING CODE
 router.get("/", authMiddleware, async (req, res) => {
   try {
     const students = await Student.find().sort({ createdAt: -1 });
@@ -47,23 +47,58 @@ router.get("/", authMiddleware, async (req, res) => {
   }
 });
 
-// Get student borrowing history - MOVED BEFORE /:studentId route
+// 🆕 NEW ROUTE - Update student status (Admin only)
+router.put("/:studentId/status", authMiddleware, async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { status } = req.body;
+
+    // Validate status
+    if (!["active", "inactive"].includes(status)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid status. Must be 'active' or 'inactive'" 
+      });
+    }
+
+    const student = await Student.findOneAndUpdate(
+      { studentId },
+      { status },
+      { new: true }
+    );
+
+    if (!student) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Student not found" 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      message: `Student status updated to ${status}`,
+      student 
+    });
+  } catch (error) {
+    console.error("Update status error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// Get student borrowing history - YOUR EXISTING CODE
 router.get("/:studentId/history", authMiddleware, async (req, res) => {
   try {
     const { studentId } = req.params;
     
-    // Find the student first
     const student = await Student.findOne({ studentId });
     if (!student) {
       return res.status(404).json({ success: false, message: "Student not found" });
     }
 
-    // Get all borrow requests for this student
     const borrowHistory = await BorrowedRequest.find({ student: student._id })
       .populate("book", "title author coverImage")
-      .sort({ createdAt: -1 }); // Most recent first
+      .sort({ createdAt: -1 });
 
-    // Calculate statistics
     const totalBorrowed = borrowHistory.length;
     const currentBorrows = borrowHistory.filter(b => b.status === "approved").length;
     const totalReturned = borrowHistory.filter(b => b.status === "returned").length;
@@ -82,7 +117,8 @@ router.get("/:studentId/history", authMiddleware, async (req, res) => {
         course: student.course,
         yearLevel: student.yearLevel,
         email: student.email,
-        contactNumber: student.contactNumber
+        contactNumber: student.contactNumber,
+        status: student.status // 🆕 Include status in response
       },
       history: borrowHistory,
       statistics: {
@@ -99,7 +135,7 @@ router.get("/:studentId/history", authMiddleware, async (req, res) => {
   }
 });
 
-// Get student by studentId (Public - for kiosk scanning) - MOVED AFTER /history route
+// Get student by studentId (Public - for kiosk scanning) - YOUR EXISTING CODE
 router.get("/:studentId", async (req, res) => {
   try {
     const student = await Student.findOne({ studentId: req.params.studentId });

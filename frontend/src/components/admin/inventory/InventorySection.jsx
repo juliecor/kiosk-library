@@ -1108,11 +1108,11 @@ function BookDetailModal({ selectedBook, setShowModal, borrowHistory, historyLoa
           </div>
 
           <div style={{ backgroundColor: "#f9fafb", padding: "16px", borderRadius: "8px", marginBottom: "24px" }}>
-            <h4 style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: "600" }}>Stock Information</h4>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: "600",color:"#0f1110ff" }}>Stock Information</h4>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
               <div>
                 <p style={{ margin: 0, fontSize: "12px", color: "#6b7280" }}>Total Copies</p>
-                <p style={{ margin: "4px 0 0 0", fontSize: "20px", fontWeight: "700" }}>{selectedBook.totalCopies}</p>
+                <p style={{ margin: "4px 0 0 0", fontSize: "20px", fontWeight: "700", color:"#0f1110ff"}}>{selectedBook.totalCopies}</p>
               </div>
               <div>
                 <p style={{ margin: 0, fontSize: "12px", color: "#6b7280" }}>Available</p>
@@ -1131,19 +1131,19 @@ function BookDetailModal({ selectedBook, setShowModal, borrowHistory, historyLoa
 
           {borrowHistory.filter(req => req.status === "returned").length > 0 && (
             <div style={{ backgroundColor: "#f9fafb", padding: "16px", borderRadius: "8px", marginBottom: "24px" }}>
-              <h4 style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: "600" }}>Return Condition Summary</h4>
+              <h4 style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: "600",color:"#0f1110ff" }}>Return Condition Summary</h4>
               <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <CheckCircle size={16} color="#10b981" />
-                  <span style={{ fontSize: "14px" }}>Good: <strong>{getConditionStats().good}</strong></span>
+                  <span style={{ fontSize: "14px",color:"#0f1110ff" }}>Good: <strong>{getConditionStats().good}</strong></span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <AlertCircleIcon size={16} color="#f59e0b" />
-                  <span style={{ fontSize: "14px" }}>Damaged: <strong>{getConditionStats().damaged}</strong></span>
+                  <span style={{ fontSize: "14px",color:"#0f1110ff" }}>Damaged: <strong>{getConditionStats().damaged}</strong></span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <XCircle size={16} color="#ef4444" />
-                  <span style={{ fontSize: "14px" }}>Lost: <strong>{getConditionStats().lost}</strong></span>
+                  <span style={{ fontSize: "14px", color:"#0f1110ff" }}>Lost: <strong>{getConditionStats().lost}</strong></span>
                 </div>
               </div>
             </div>
@@ -1173,7 +1173,7 @@ function BookDetailModal({ selectedBook, setShowModal, borrowHistory, historyLoa
           )}
 
           <div>
-            <h4 style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: "600" }}>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: "600",color:"#0f1110ff" }}>
               Borrow History (Last 10)
             </h4>
             
@@ -1188,10 +1188,10 @@ function BookDetailModal({ selectedBook, setShowModal, borrowHistory, historyLoa
                 {borrowHistory.slice(0, 10).map((req) => (
                   <div key={req._id} style={{ padding: "12px", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between" }}>
                     <div>
-                      <p style={{ margin: 0, fontSize: "14px", fontWeight: "500" }}>
+                      <p style={{ margin: 0, fontSize: "14px", fontWeight: "500",color:"#0f1110ff" }}>
                         {req.student?.firstName} {req.student?.lastName}
                       </p>
-                      <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#6b7280" }}>
+                      <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#292727ff" }}>
                         {req.status === "returned" 
                           ? `Returned: ${new Date(req.returnDate).toLocaleDateString()}`
                           : req.status === "approved"
@@ -1200,19 +1200,34 @@ function BookDetailModal({ selectedBook, setShowModal, borrowHistory, historyLoa
                         }
                       </p>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      {req.status === "returned" && req.bookCondition && (
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                          {getConditionIcon(req.bookCondition)}
+                   <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                          {req.status === "returned" && req.bookCondition && (
+                            <span style={{
+                              padding: "4px 8px",
+                              borderRadius: "12px",
+                              fontSize: "12px",
+                              fontWeight: "600",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              backgroundColor: req.bookCondition === "good" ? "#d1fae5" : 
+                                              req.bookCondition === "damaged" ? "#fef3c7" : "#fee2e2",
+                              color: req.bookCondition === "good" ? "#065f46" : 
+                                    req.bookCondition === "damaged" ? "#92400e" : "#991b1b"
+                            }}>
+                              {req.bookCondition === "good" && <CheckCircle size={12} />}
+                              {req.bookCondition === "damaged" && <AlertCircleIcon size={12} />}
+                              {req.bookCondition === "lost" && <XCircle size={12} />}
+                              {req.bookCondition.toUpperCase()}
+                            </span>
+                          )}
+                          {req.totalFee > 0 && (
+                            <span style={{ fontSize: "13px", fontWeight: "700", color: "#ef4444" }}>
+                              ₱{req.totalFee}
+                            </span>
+                          )}
+                          {req.isLate && <Clock size={14} color="#ef4444" />}
                         </div>
-                      )}
-                      {req.totalFee > 0 && (
-                        <span style={{ fontSize: "12px", fontWeight: "600", color: "#ef4444" }}>
-                          ₱{req.totalFee}
-                        </span>
-                      )}
-                      {req.isLate && <Clock size={14} color="#ef4444" />}
-                    </div>
                   </div>
                 ))}
               </div>

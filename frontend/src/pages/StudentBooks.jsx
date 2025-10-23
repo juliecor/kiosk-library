@@ -26,6 +26,10 @@ export default function StudentBooks() {
   const [filterYear, setFilterYear] = useState("");
   const [sortBy, setSortBy] = useState("");
 
+  // 🆕 NEW STATE for student info and status
+  const [studentInfo, setStudentInfo] = useState(null);
+  const [checkingStudent, setCheckingStudent] = useState(false);
+
   // Inactivity timer
   const inactivityTimerRef = useRef(null);
   const INACTIVITY_TIMEOUT = 120000; // 2 minutes in milliseconds
@@ -111,9 +115,10 @@ export default function StudentBooks() {
   const handleBorrowClick = (book) => {
     setSelectedBook(book);
     setShowPopup(true);
-    setShowTerms(false); // Start at step 1
-    setAgreedToTerms(false); // Reset agreement
-    setFailedAttempts(0); // Reset attempts when opening new borrow request
+    setShowTerms(false);
+    setAgreedToTerms(false);
+    setFailedAttempts(0);
+    setStudentInfo(null); // 🆕 Reset student info
   };
 
   const handlePreviewClick = (book) => {
@@ -124,8 +129,64 @@ export default function StudentBooks() {
     setViewingBook(null);
   };
 
-  // NEW: Handle moving from step 1 to step 2
-  const handleNextToTerms = () => {
+  // 🆕 NEW FUNCTION: Check student status
+  const checkStudentStatus = async (id) => {
+    setCheckingStudent(true);
+    try {
+      const response = await axios.get(`http://localhost:5000/api/students/${id}`);
+      
+      if (response.data.success) {
+        const student = response.data.student;
+        setStudentInfo(student);
+        
+        // Check if student is inactive
+        if (student.status === 'inactive') {
+          toast.error(
+            `🚫 Account Inactive\n\nYour library account is currently inactive.\nPlease contact the library to activate your account.`,
+            {
+              duration: 5000,
+              position: 'top-center',
+              style: {
+                borderRadius: '12px',
+                background: '#ef4444',
+                color: '#fff',
+                fontSize: '16px',
+                fontWeight: '600',
+                padding: '20px 28px',
+                maxWidth: '500px',
+              },
+            }
+          );
+          return false; // Cannot proceed
+        }
+        
+        return true; // Can proceed
+      }
+    } catch (error) {
+      console.error("Error checking student:", error);
+      toast.error(
+        `❌ Student not found\n\nPlease check your Student ID and try again.`,
+        {
+          duration: 4000,
+          position: 'top-center',
+          style: {
+            borderRadius: '12px',
+            background: '#ef4444',
+            color: '#fff',
+            fontSize: '16px',
+            fontWeight: '600',
+            padding: '20px 28px',
+          },
+        }
+      );
+      return false;
+    } finally {
+      setCheckingStudent(false);
+    }
+  };
+
+  // UPDATED: Handle moving from step 1 to step 2 with status check
+  const handleNextToTerms = async () => {
     if (!studentId.trim()) {
       toast.error("Please enter your Student ID", {
         duration: 3000,
@@ -134,10 +195,18 @@ export default function StudentBooks() {
       });
       return;
     }
-    setShowTerms(true); // Move to step 2
+
+    // 🆕 Check student status before proceeding
+    const canProceed = await checkStudentStatus(studentId);
+    
+    if (canProceed) {
+      setShowTerms(true); // Move to step 2
+    } else {
+      // Don't proceed - student is inactive or not found
+      // Error message already shown by checkStudentStatus
+    }
   };
 
-  // NEW: Handle going back from step 2 to step 1
   const handleBackToId = () => {
     setShowTerms(false);
     setAgreedToTerms(false);
@@ -153,7 +222,6 @@ export default function StudentBooks() {
       return;
     }
 
-    // Show loading toast
     const loadingToast = toast.loading('Submitting your request...', {
       position: 'top-center',
     });
@@ -164,17 +232,15 @@ export default function StudentBooks() {
         bookId: selectedBook._id,
       });
 
-      // Dismiss loading
       toast.dismiss(loadingToast);
       
-      // Close popup immediately
       setShowPopup(false);
       setStudentId("");
       setSelectedBook(null);
       setShowTerms(false);
       setAgreedToTerms(false);
+      setStudentInfo(null);
 
-      // Show success message
       toast.success(
         `🎉 SUCCESS!\n\nBook borrowed successfully!\nReturning to home page...`,
         {
@@ -192,14 +258,12 @@ export default function StudentBooks() {
         }
       );
 
-      // Auto-return to landing page after 3 seconds
       setTimeout(() => {
         navigate('/');
       }, 3000);
 
       fetchBooks();
     } catch (error) {
-      // Dismiss loading toast
       toast.dismiss(loadingToast);
       
       console.error("Error submitting borrow request:", error);
@@ -207,11 +271,9 @@ export default function StudentBooks() {
       const errorMessage = error.response?.data?.message || "Failed to submit borrow request";
       const currentBook = error.response?.data?.currentBook;
 
-      // Increment failed attempts
       const newAttempts = failedAttempts + 1;
       setFailedAttempts(newAttempts);
 
-      // Check if max attempts reached
       if (newAttempts >= 3) {
         toast.error(
           `😟 Too many failed attempts!\n\nPlease ask a librarian for help.\nReturning to home page...`,
@@ -230,14 +292,13 @@ export default function StudentBooks() {
           }
         );
 
-        // Close popup
         setShowPopup(false);
         setStudentId("");
         setSelectedBook(null);
         setShowTerms(false);
         setAgreedToTerms(false);
+        setStudentInfo(null);
 
-        // Auto-return to landing page after 3 seconds
         setTimeout(() => {
           navigate('/');
         }, 3000);
@@ -245,7 +306,6 @@ export default function StudentBooks() {
         return;
       }
 
-      // Show error toast with remaining attempts
       if (currentBook) {
         toast.error(
           `🚫 Cannot borrow!\n\nYou must return "${currentBook}" first.\n\nAttempts left: ${3 - newAttempts}`,
@@ -281,10 +341,10 @@ export default function StudentBooks() {
         );
       }
 
-      // Go back to step 1 for retry
       setShowTerms(false);
       setAgreedToTerms(false);
       setStudentId("");
+      setStudentInfo(null);
     }
   };
 
@@ -295,6 +355,7 @@ export default function StudentBooks() {
     setFailedAttempts(0);
     setShowTerms(false);
     setAgreedToTerms(false);
+    setStudentInfo(null);
   };
 
   const handleResetFilters = () => {
@@ -309,7 +370,6 @@ export default function StudentBooks() {
     });
   };
 
-  // Calculate due date (1 day from now)
   const calculateDueDate = () => {
     const date = new Date();
     date.setDate(date.getDate() + 1);
@@ -320,13 +380,11 @@ export default function StudentBooks() {
     });
   };
 
-  // Unique filter options
   const shelfOptions = [...new Set(books.map(b => b.shelfLocation).filter(Boolean))];
   const yearOptions = [...new Set(books.map(b => b.publicationYear).filter(Boolean))].sort((a, b) => b - a);
 
   return (
     <div className="student-books-container">
-      {/* Toast Container */}
       <Toaster
         toastOptions={{
           success: {
@@ -359,7 +417,6 @@ export default function StudentBooks() {
         <span className="search-icon">🔍</span>
       </div>
 
-      {/* Filters Section */}
       <div className="filters-container">
         <select value={filterShelf} onChange={(e) => setFilterShelf(e.target.value)}>
           <option value="">All Shelf Locations</option>
@@ -453,7 +510,7 @@ export default function StudentBooks() {
         </div>
       )}
 
-      {/* Borrow Popup - STEP 1: Enter Student ID */}
+      {/* STEP 1: Enter Student ID */}
       {showPopup && selectedBook && !showTerms && (
         <div className="student-popup" onClick={handleClosePopup}>
           <div className="student-popup-content" onClick={(e) => e.stopPropagation()}>
@@ -486,8 +543,9 @@ export default function StudentBooks() {
                 onChange={(e) => setStudentId(e.target.value)}
                 className="student-id-input"
                 autoFocus
+                disabled={checkingStudent}
                 onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
+                  if (e.key === 'Enter' && !checkingStudent) {
                     handleNextToTerms();
                   }
                 }}
@@ -495,15 +553,21 @@ export default function StudentBooks() {
             </div>
 
             <div className="popup-buttons">
-              <button onClick={handleNextToTerms} className="confirm-btn">Next →</button>
+              <button 
+                onClick={handleNextToTerms} 
+                className="confirm-btn"
+                disabled={checkingStudent}
+              >
+                {checkingStudent ? 'Checking...' : 'Next →'}
+              </button>
               <button onClick={handleClosePopup} className="cancel-btn">Cancel</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Borrow Popup - STEP 2: Terms & Guidelines */}
-      {showPopup && selectedBook && showTerms && (
+      {/* STEP 2: Terms & Guidelines */}
+      {showPopup && selectedBook && showTerms && studentInfo && (
         <div className="student-popup" onClick={handleClosePopup}>
           <div className="student-popup-content terms-popup" onClick={(e) => e.stopPropagation()}>
             <button className="close-btn" onClick={handleClosePopup}>×</button>
@@ -524,8 +588,30 @@ export default function StudentBooks() {
                 <div className="terms-detail-item">
                   <span className="terms-icon">👤</span>
                   <div>
-                    <strong>Student ID:</strong>
-                    <p>{studentId}</p>
+                    <strong>Student:</strong>
+                    <p>{studentInfo.firstName} {studentInfo.lastName}</p>
+                    <p style={{ fontSize: '13px', color: '#6b7280' }}>ID: {studentId}</p>
+                  </div>
+                </div>
+                {/* 🆕 Show status badge */}
+                <div className="terms-detail-item">
+                  <span className="terms-icon">✓</span>
+                  <div>
+                    <strong>Account Status:</strong>
+                    <p>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '4px 12px',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        backgroundColor: '#d1fae5',
+                        color: '#065f46',
+                        textTransform: 'uppercase'
+                      }}>
+                        Active
+                      </span>
+                    </p>
                   </div>
                 </div>
                 <div className="terms-detail-item">

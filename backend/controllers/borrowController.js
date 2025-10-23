@@ -21,6 +21,16 @@ exports.createBorrowRequest = async (req, res) => {
     const book = await Book.findById(bookId);
 
     if (!student) return res.status(404).json({ success: false, message: "Student not found" });
+    
+    // 🆕 CHECK STUDENT STATUS - Added here without breaking existing flow
+    if (student.status === "inactive") {
+      return res.status(403).json({
+        success: false,
+        message: "Your account is inactive. Please contact the library to activate your account.",
+        status: "inactive"
+      });
+    }
+
     if (!book) return res.status(404).json({ success: false, message: "Book not found" });
     if (book.availableCopies <= 0) return res.status(400).json({ success: false, message: "No copies available" });
 
@@ -75,6 +85,15 @@ exports.approveRequest = async (req, res) => {
   try {
     const request = await BorrowedRequest.findById(req.params.id).populate("student book");
     if (!request) return res.status(404).json({ success: false, message: "Request not found" });
+
+    // 🆕 CHECK STUDENT STATUS - Before approving
+    if (request.student.status === "inactive") {
+      return res.status(403).json({
+        success: false,
+        message: `Cannot approve. Student account is inactive.`,
+        studentStatus: "inactive"
+      });
+    }
 
     const existingBorrow = await BorrowedRequest.findOne({
       student: request.student._id,
@@ -222,7 +241,7 @@ exports.returnBook = async (req, res) => {
     if (bookCondition === "damaged") {
       request.damageLevel = damageLevel || "minor";
       request.damageDescription = damageDescription;
-      request.damageFee = damageFee !== undefined ? damageFee : 75; // ✅ use frontend value if sent
+      request.damageFee = damageFee !== undefined ? damageFee : 75;
     } else if (bookCondition === "lost") {
       request.damageFee = damageFee !== undefined
         ? damageFee
@@ -259,7 +278,7 @@ exports.returnBook = async (req, res) => {
       await Book.findByIdAndUpdate(bookId, { $inc: { totalCopies: -1 } });
     }
 
-    // SMS Notification (unchanged)
+    // SMS Notification
     let smsSent = false;
     try {
       if (request.student?.contactNumber) {
@@ -341,11 +360,9 @@ exports.payLateFee = async (req, res) => {
 
     const totalPaid = request.totalFee;
 
-    // ✅ Just mark as paid — don't reset the fees
     request.paid = true;
     await request.save();
 
-    // ✅ Optional: keep record of payment via SMS
     try {
       if (request.student?.contactNumber) {
         await axios.get(SMS_GATEWAY_URL, {
@@ -371,7 +388,6 @@ exports.payLateFee = async (req, res) => {
   }
 };
 
-
 // ==========================
 // CHECK STUDENT ELIGIBILITY
 // ==========================
@@ -382,6 +398,17 @@ exports.checkBorrowEligibility = async (req, res) => {
     const student = await Student.findOne({ studentId });
     if (!student) {
       return res.status(404).json({ success: false, message: "Student not found" });
+    }
+
+    // 🆕 CHECK STUDENT STATUS - Added to eligibility check
+    if (student.status === "inactive") {
+      return res.json({
+        success: true,
+        canBorrow: false,
+        message: "Student account is inactive. Please contact the library.",
+        reason: "inactive_account",
+        studentStatus: student.status
+      });
     }
 
     const unreturnedBook = await BorrowedRequest.findOne({
@@ -395,6 +422,7 @@ exports.checkBorrowEligibility = async (req, res) => {
         success: true,
         canBorrow: false,
         message: `Student has an unreturned book: "${unreturnedBook.book.title}"`,
+        reason: "unreturned_book",
         currentBook: {
           title: unreturnedBook.book.title,
           borrowDate: unreturnedBook.borrowDate,
@@ -407,7 +435,8 @@ exports.checkBorrowEligibility = async (req, res) => {
     res.json({
       success: true,
       canBorrow: true,
-      message: "Student can borrow a book"
+      message: "Student can borrow a book",
+      studentStatus: student.status
     });
 
   } catch (error) {

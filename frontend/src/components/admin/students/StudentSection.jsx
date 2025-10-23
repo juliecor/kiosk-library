@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import StudentHistoryModal from './StudentHistoryModal';
 
 function StudentSection({
@@ -19,8 +19,25 @@ function StudentSection({
   handleCloseStudentView,
   viewingHistory,              
   handleViewHistory,           
-  handleCloseHistory           
+  handleCloseHistory,
+  // 🆕 NEW: Functions for status management
+  handleToggleStatus,
+  statusUpdateLoading
 }) {
+  const [confirmStatusChange, setConfirmStatusChange] = useState(null);
+
+  // 🆕 Handle status toggle with confirmation
+  const handleStatusClick = (student) => {
+    setConfirmStatusChange(student);
+  };
+
+  const confirmToggle = async () => {
+    if (confirmStatusChange) {
+      await handleToggleStatus(confirmStatusChange);
+      setConfirmStatusChange(null);
+    }
+  };
+
   return (
     <div className="admin-dashboard-content">
       {/* Tab Navigation */}
@@ -61,7 +78,7 @@ function StudentSection({
         </div>
       </div>
 
-      {/* Register Tab Content - UNCHANGED */}
+      {/* Register Tab - Keep your existing form code */}
       {studentTab === 'register' && (
         <div style={{ maxWidth: '800px', margin: '0 auto' }}>
           <div style={{ 
@@ -110,7 +127,7 @@ function StudentSection({
                       width: '100%',
                       padding: '10px 14px',
                       color:'#373737ff',
-                       backgroundColor: '#ffffffff', 
+                      backgroundColor: '#ffffffff', 
                       border: '1px solid #dbdfe5ff',
                       borderRadius: '6px',
                       fontSize: '15px'
@@ -131,8 +148,8 @@ function StudentSection({
                     style={{
                       width: '100%',
                       padding: '10px 14px',
-                       color:'#373737ff',
-                       backgroundColor: '#ffffffff', 
+                      color:'#373737ff',
+                      backgroundColor: '#ffffffff', 
                       border: '1px solid #d1d5db',
                       borderRadius: '6px',
                       fontSize: '14px'
@@ -155,8 +172,8 @@ function StudentSection({
                   style={{
                     width: '100%',
                     padding: '10px 14px',
-                     color:'#373737ff',
-                       backgroundColor: '#ffffffff', 
+                    color:'#373737ff',
+                    backgroundColor: '#ffffffff', 
                     border: '1px solid #d1d5db',
                     borderRadius: '6px',
                     fontSize: '14px'
@@ -178,8 +195,8 @@ function StudentSection({
                     style={{
                       width: '100%',
                       padding: '10px 14px',
-                       color:'#373737ff',
-                       backgroundColor: '#ffffffff', 
+                      color:'#373737ff',
+                      backgroundColor: '#ffffffff', 
                       border: '1px solid #d1d5db',
                       borderRadius: '6px',
                       fontSize: '14px'
@@ -204,7 +221,7 @@ function StudentSection({
                     disabled={!studentForm.educationLevel}
                     style={{
                       width: '100%',
-                       color:'#373737ff',
+                      color:'#373737ff',
                       padding: '10px 14px',
                       border: '1px solid #d1d5db',
                       borderRadius: '6px',
@@ -238,8 +255,8 @@ function StudentSection({
                     style={{
                       width: '100%',
                       padding: '10px 14px',
-                       color:'#373737ff',
-                       backgroundColor: '#ffffffff', 
+                      color:'#373737ff',
+                      backgroundColor: '#ffffffff', 
                       border: '1px solid #d1d5db',
                       borderRadius: '6px',
                       fontSize: '14px'
@@ -266,7 +283,7 @@ function StudentSection({
                   style={{
                     width: '100%',
                     color:'#373737ff',
-                     backgroundColor: '#ffffffff', 
+                    backgroundColor: '#ffffffff', 
                     padding: '10px 14px',
                     border: '1px solid #d1d5db',
                     borderRadius: '6px',
@@ -289,7 +306,7 @@ function StudentSection({
                     style={{
                       width: '100%',
                       color:'#373737ff',
-                       backgroundColor: '#ffffffff', 
+                      backgroundColor: '#ffffffff', 
                       padding: '10px 14px',
                       border: '1px solid #d1d5db',
                       borderRadius: '6px',
@@ -311,7 +328,7 @@ function StudentSection({
                     style={{
                       width: '100%',
                       color:'#373737ff',
-                       backgroundColor: '#ffffffff', 
+                      backgroundColor: '#ffffffff', 
                       padding: '10px 14px',
                       border: '1px solid #d1d5db',
                       borderRadius: '6px',
@@ -417,6 +434,7 @@ function StudentSection({
                     <tr style={{ backgroundColor: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
                       <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Student ID</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Name</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Status</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Education Level</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Course/Strand</th>
                       <th style={{ padding: '12px', textAlign: 'left', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Year Level</th>
@@ -445,6 +463,20 @@ function StudentSection({
                           <td style={{ padding: '12px', fontSize: '14px', color: '#1f2937' }}>
                             {student.firstName} {student.middleName} {student.lastName}
                           </td>
+                          <td style={{ padding: '12px', fontSize: '14px' }}>
+                            <span style={{
+                              padding: '4px 12px',
+                              borderRadius: '12px',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              backgroundColor: student.status === 'active' ? '#d1fae5' : '#fee2e2',
+                              color: student.status === 'active' ? '#065f46' : '#991b1b',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.5px'
+                            }}>
+                              {student.status || 'active'}
+                            </span>
+                          </td>
                           <td style={{ padding: '12px', fontSize: '14px', color: '#6b7280' }}>
                             {student.educationLevel || 'N/A'}
                           </td>
@@ -458,7 +490,7 @@ function StudentSection({
                             {student.contactNumber || student.email || 'N/A'}
                           </td>
                           <td style={{ padding: '12px', fontSize: '14px' }}>
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                               <button
                                 onClick={() => handleViewStudent(student)}
                                 style={{
@@ -473,7 +505,6 @@ function StudentSection({
                               >
                                 Info
                               </button>
-                              {/* NEW: History Button */}
                               <button
                                 onClick={() => handleViewHistory(student.studentId)}
                                 style={{
@@ -490,17 +521,23 @@ function StudentSection({
                                 History
                               </button>
                               <button
+                                onClick={() => handleStatusClick(student)}
+                                disabled={statusUpdateLoading === student.studentId}
                                 style={{
                                   padding: '6px 12px',
                                   fontSize: '13px',
-                                  backgroundColor: '#fef3c7',
-                                  color: '#92400e',
-                                  border: '1px solid #fbbf24',
+                                  backgroundColor: student.status === 'active' ? '#fef3c7' : '#d1fae5',
+                                  color: student.status === 'active' ? '#92400e' : '#065f46',
+                                  border: `1px solid ${student.status === 'active' ? '#fbbf24' : '#6ee7b7'}`,
                                   borderRadius: '6px',
-                                  cursor: 'pointer'
+                                  cursor: statusUpdateLoading === student.studentId ? 'not-allowed' : 'pointer',
+                                  opacity: statusUpdateLoading === student.studentId ? 0.6 : 1
                                 }}
+                                title={student.status === 'active' ? 'Deactivate Student' : 'Activate Student'}
                               >
-                                Edit
+                                {statusUpdateLoading === student.studentId ? '...' : 
+                                  (student.status === 'active' ? '🔒 Deactivate' : '✅ Activate')
+                                }
                               </button>
                             </div>
                           </td>
@@ -514,7 +551,7 @@ function StudentSection({
         </div>
       )}
 
-      {/* View Student Modal - UNCHANGED */}
+      {/* View Student Modal */}
       {viewingStudent && (
         <div style={{
           position: 'fixed',
@@ -565,6 +602,25 @@ function StudentSection({
                 <p style={{ fontSize: '16px', color: '#1f2937', margin: 0 }}>
                   {viewingStudent.studentId}
                 </p>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6b7280', marginBottom: '4px' }}>
+                  ACCOUNT STATUS
+                </label>
+                <span style={{
+                  display: 'inline-block',
+                  padding: '6px 16px',
+                  borderRadius: '12px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  backgroundColor: viewingStudent.status === 'active' ? '#d1fae5' : '#fee2e2',
+                  color: viewingStudent.status === 'active' ? '#065f46' : '#991b1b',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  {viewingStudent.status || 'active'}
+                </span>
               </div>
 
               <div>
@@ -660,7 +716,125 @@ function StudentSection({
         </div>
       )}
 
-      {/* NEW: Student History Modal */}
+      {/* Confirmation Modal for Status Change */}
+      {confirmStatusChange && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1001
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '32px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+          }}>
+            <h3 style={{ 
+              fontSize: '20px', 
+              fontWeight: '600', 
+              color: '#1f2937', 
+              marginBottom: '16px',
+              textAlign: 'center'
+            }}>
+              {confirmStatusChange.status === 'active' ? '🔒 Deactivate Student?' : '✅ Activate Student?'}
+            </h3>
+            
+            <div style={{ 
+              backgroundColor: '#f9fafb', 
+              padding: '16px', 
+              borderRadius: '8px', 
+              marginBottom: '20px',
+              border: '1px solid #e5e7eb'
+            }}>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#6b7280' }}>
+                <strong>Student:</strong> {confirmStatusChange.firstName} {confirmStatusChange.lastName}
+              </p>
+              <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#6b7280' }}>
+                <strong>ID:</strong> {confirmStatusChange.studentId}
+              </p>
+              <p style={{ margin: '0', fontSize: '14px', color: '#6b7280' }}>
+                <strong>Current Status:</strong>{' '}
+                <span style={{
+                  padding: '2px 8px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  backgroundColor: confirmStatusChange.status === 'active' ? '#d1fae5' : '#fee2e2',
+                  color: confirmStatusChange.status === 'active' ? '#065f46' : '#991b1b',
+                  textTransform: 'uppercase'
+                }}>
+                  {confirmStatusChange.status || 'active'}
+                </span>
+              </p>
+            </div>
+
+            <p style={{ 
+              fontSize: '15px', 
+              color: '#374151', 
+              marginBottom: '24px',
+              lineHeight: '1.6'
+            }}>
+              {confirmStatusChange.status === 'active' ? (
+                <>
+                  Are you sure you want to <strong style={{color: '#dc2626'}}>deactivate</strong> this student? 
+                  They will <strong>not be able to borrow books</strong> until reactivated.
+                </>
+              ) : (
+                <>
+                  Are you sure you want to <strong style={{color: '#16a34a'}}>activate</strong> this student? 
+                  They will be able to borrow books from the library.
+                </>
+              )}
+            </p>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setConfirmStatusChange(null)}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmToggle}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  backgroundColor: confirmStatusChange.status === 'active' ? '#dc2626' : '#16a34a',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                {confirmStatusChange.status === 'active' ? 'Yes, Deactivate' : 'Yes, Activate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Student History Modal */}
       {viewingHistory && (
         <StudentHistoryModal
           studentId={viewingHistory}
