@@ -10,6 +10,8 @@ const statsRoutes = require("./routes/statsRoutes");
 const reportsRoutes = require("./routes/reportsRoutes");
 const inventoryRoutes = require('./routes/inventory');
 
+
+
 const cors = require("cors");
 
 dotenv.config();
@@ -32,6 +34,8 @@ app.use("/api/students", studentRoutes);
 app.use("/api/borrow", borrowRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/reports", reportsRoutes);
+
+require("./cronJobs/overdueAndLateFeeChecker.js");
 
 const PORT = process.env.PORT || 5000;
 

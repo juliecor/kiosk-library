@@ -4,12 +4,12 @@ const Student = require("../models/student");
 const Book = require("../models/book");
 const axios = require("axios");
 
-const SMS_GATEWAY_URL = "http://192.168.1.2:8080/send";
+const SMS_GATEWAY_URL = "http://192.168.1.17:8080/send";
 
 // ==========================
 // CREATE BORROW REQUEST
 // ==========================
-exports.createBorrowRequest = async (req, res) => {
+exports.createBorrowRequest = async (req, res) => { 
   try {
     const { studentId, bookId } = req.body;
 
@@ -22,7 +22,7 @@ exports.createBorrowRequest = async (req, res) => {
 
     if (!student) return res.status(404).json({ success: false, message: "Student not found" });
     
-    // 🆕 CHECK STUDENT STATUS - Added here without breaking existing flow
+    // 🆕 CHECK STUDENT STATUS
     if (student.status === "inactive") {
       return res.status(403).json({
         success: false,
@@ -48,19 +48,41 @@ exports.createBorrowRequest = async (req, res) => {
       });
     }
 
+    // ✅ CREATE BORROW REQUEST
     const request = await BorrowedRequest.create({
       student: student._id,
       book: book._id,
       status: "pending",
     });
 
-    res.json({ success: true, message: "Borrow request created", request });
+    // ✅ SEND SMS to student
+    let smsSent = false;
+    try {
+      if (student?.contactNumber) {
+        await axios.get(SMS_GATEWAY_URL, {
+          params: {
+            to: student.contactNumber,
+            message: `BENEDICTO COLLEGE LIBRARY: Hi ${student.firstName}, your borrow request for "${book.title}" has been submitted successfully. Please wait for admin approval.`
+          }
+        });
+        smsSent = true;
+      }
+    } catch (err) {
+      console.error("SMS failed:", err.message);
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Borrow request created", 
+      smsSent,
+      request 
+    });
+    
   } catch (error) {
     console.error("createBorrowRequest error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
 // ==========================
 // GET ALL REQUESTS
 // ==========================

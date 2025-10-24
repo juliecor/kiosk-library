@@ -6,8 +6,10 @@ import bclogo from "../assets/bclogo.jpg";
 import step1 from "../assets/1.png";
 import step2 from "../assets/2.png";
 import step3  from "../assets/3.png";
-import step4 from "../assets/4.png";
-import step5 from "../assets/5.png";
+import step4  from "../assets/4.png";
+import step5  from "../assets/5.png";
+import step6  from "../assets/6.png";
+import step7  from "../assets/7.png";
 import { useNavigate } from "react-router-dom";
 
 const LandingPage = () => {
@@ -20,38 +22,44 @@ const LandingPage = () => {
     {
       title: "Step 1: Click Browse Books",
       description: "Click the blue 'Browse Books' button to start",
-      image: step1,
+      image: step4,
       stepNumber: "1"
     },
     {
       title: "Step 2: Search for a Book",
       description: "Type the book name you want in the search box",
-      image: step2,
+      image: step5,
       stepNumber: "2"
     },
     {
       title: "Step 3: Click the Borrow Button",
       description: "Find your book and click Borrow button",
-      image: step3,
+      image: step6,
       stepNumber: "3"
     },
     {
       title: "Step 4: Enter Your ID",
-      description: "Type your student ID number carefully",
-      image: step4,
+      description: "Type your student ID number carefully and then click Next button",
+      image: step1,
       stepNumber: "4"
     },
     {
-      title: "Step 5: Click the Confirm Button",
-      description: "Click the Confirm Button",
-      image: step5,
+      title: "Step 5: Then click the I agree to proceed",
+      description: "Click the i agree checkbox",
+     image: step2,
       stepNumber: "5"
     },
     {
-      title: "Step 6: Done!",
-      description: "Great job! Your book is now borrowed! 🎉",
-      image: step5,
+      title: "Step 6: Then Click the Confirm Borrow",
+      description: "CLick the blue Button 🎉",
+      image: step3,
       stepNumber: "6"
+    },
+     {
+      title: "Step 7: Done ",
+      description: "Congratulations 🎉",
+      image: step7,
+      stepNumber: "7"
     }
   ];
 

@@ -663,7 +663,7 @@ export default function StudentBooks() {
                   <span className="guideline-icon">📱</span>
                   <div>
                     <strong>Notifications:</strong>
-                    <p>You'll receive SMS reminders about due dates and fees</p>
+                    <p>You'll receive SMS reminders about </p>
                   </div>
                 </div>
               </div>

@@ -733,7 +733,7 @@ function AdminDashboard() {
               editingBook={editingBook}
               editBookForm={editBookForm}
               editImagePreview={editImagePreview}
-              handleEditBookFormChange={handleEditBookFormFormChange}
+              handleEditBookFormChange={handleEditBookFormChange}
               handleEditImageChange={handleEditImageChange}
               handleUpdateBook={handleUpdateBook}
               handleCancelEdit={handleCancelEdit}
@@ -743,7 +743,9 @@ function AdminDashboard() {
           {activeSection === 'requests' && (
             <BorrowRequestsSection />
           )}
-
+           {activeSection === 'books' && (
+            < BookSection/>
+          )}
           {activeSection === 'reports' && (
             <ReportsSection />
           )}

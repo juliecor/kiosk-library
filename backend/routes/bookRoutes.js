@@ -19,4 +19,5 @@ router.post("/:id/restore", authMiddleware, bookController.restoreBook);
 router.get("/api/books", bookController.getBooks);           // With pagination
 router.put("/api/books/:id/adjust", bookController.adjustStock);  // New!
 router.get("/api/books/stats", bookController.getInventoryStats); // New!
+
 module.exports = router;
