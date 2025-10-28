@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Book = require('../models/book');
-const StockHistory = require('../models/StockHistory');
+const StockHistory = require('../models/stockHistory');
 const BorrowedRequest = require('../models/borrowedRequest');
 const Admin = require('../models/admin');
 const auth = require('../middleware/auth');
@@ -200,7 +200,14 @@ router.post('/stock-history', auth, async (req, res) => {
 // GET /api/inventory/damaged-books
 router.get('/damaged-books', auth, async (req, res) => {
   try {
-    const damagedBooks = await BorrowedRequest.find({ 
+    // 1️⃣ Fetch damages from StockHistory
+    const stockDamages = await StockHistory.find({ reason: 'damage' })
+      .sort({ createdAt: -1 })
+      .populate('book', 'title author category')
+      .populate('admin', 'fullName');
+
+    // 2️⃣ Fetch damages from BorrowedRequest
+    const borrowedDamages = await BorrowedRequest.find({ 
       bookCondition: 'damaged',
       status: 'returned'
     })
@@ -209,24 +216,49 @@ router.get('/damaged-books', auth, async (req, res) => {
     .populate('student', 'firstName lastName studentId')
     .populate('assessedBy', 'fullName');
 
+    // 3️⃣ Map StockHistory damage entries
+    const stockDamageMapped = stockDamages.map(item => ({
+      _id: item._id,
+      bookTitle: item.bookTitle,
+      author: item.author,
+      category: item.book?.category,
+      quantity: item.quantity,
+      previousTotal: item.previousTotal,
+      newTotal: item.newTotal,
+      date: item.createdAt,
+      notes: item.notes,
+      adminName: item.adminName,
+      type: 'stock_damage'
+    }));
+
+    // 4️⃣ Map BorrowedRequest damage entries
+    const borrowedDamageMapped = borrowedDamages.map(item => ({
+      _id: item._id,
+      bookTitle: item.book?.title,
+      author: item.book?.author,
+      studentName: item.student ? `${item.student.firstName} ${item.student.lastName}` : 'Unknown Student',
+      studentId: item.student?.studentId,
+      returnDate: item.returnDate,
+      damageLevel: item.damageLevel,
+      damageDescription: item.damageDescription,
+      damageFee: item.damageFee,
+      assessedBy: item.assessedBy?.fullName,
+      type: 'borrowed_damage'
+    }));
+
+    // 5️⃣ Combine both sources
+    const allDamagedBooks = [...stockDamageMapped, ...borrowedDamageMapped]
+      .sort((a, b) => new Date(b.date || b.returnDate) - new Date(a.date || a.returnDate));
+
     res.json({
       success: true,
-      damagedBooks: damagedBooks.map(item => ({
-        _id: item._id,
-        bookTitle: item.book?.title,
-        studentName: item.student ? `${item.student.firstName} ${item.student.lastName}` : 'Unknown Student',
-        studentId: item.student?.studentId,
-        returnDate: item.returnDate,
-        damageLevel: item.damageLevel,
-        damageDescription: item.damageDescription,
-        damageFee: item.damageFee,
-        assessedBy: item.assessedBy?.fullName
-      }))
+      damagedBooks: allDamagedBooks
     });
   } catch (error) {
     console.error('Error fetching damaged books:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+
 
 module.exports = router;

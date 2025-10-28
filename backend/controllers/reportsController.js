@@ -97,8 +97,9 @@ exports.getOverdueBooks = async (req, res) => {
     const dateRange = getDateRangeFilter(req);
     const dateMatch = buildCreatedAtMatch(dateRange);
 
-    const approvedRequests = await BorrowedRequest.find({ 
-      status: "approved",
+    // 🔧 FIX: Include both "approved" and "overdue" statuses
+    const overdueRequests = await BorrowedRequest.find({ 
+      status: { $in: ["approved", "overdue"] }, // ✅ CHANGED THIS LINE
       ...dateMatch
     })
       .populate("student", "firstName lastName studentId contactNumber email")
@@ -106,11 +107,16 @@ exports.getOverdueBooks = async (req, res) => {
 
     const overdueBooks = [];
 
-    approvedRequests.forEach(request => {
+    overdueRequests.forEach(request => {
       const borrowDate = new Date(request.borrowDate || request.createdAt);
-      const dueDate = new Date(borrowDate);
-      dueDate.setDate(dueDate.getDate() + 1);
+      const dueDate = new Date(request.dueDate || borrowDate);
+      
+      // If dueDate is not set, calculate it (1 day from borrow)
+      if (!request.dueDate) {
+        dueDate.setDate(dueDate.getDate() + 1);
+      }
 
+      // Check if the book is overdue
       if (now > dueDate) {
         const daysOverdue = Math.ceil((now - dueDate) / (1000 * 60 * 60 * 24));
         const potentialFee = daysOverdue * 5;
@@ -122,7 +128,8 @@ exports.getOverdueBooks = async (req, res) => {
           borrowDate: request.borrowDate || request.createdAt,
           dueDate: dueDate,
           daysOverdue: daysOverdue,
-          potentialFee: potentialFee
+          potentialFee: potentialFee,
+          status: request.status // ✅ Include status for debugging
         });
       }
     });
@@ -140,7 +147,6 @@ exports.getOverdueBooks = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
 /**
  * Get top borrowers
  */
@@ -319,6 +325,7 @@ exports.getReportSummary = async (req, res) => {
 
 /**
  * Get comprehensive financial summary
+ * 🔧 FIXED: Recalculates late fees with correct formula
  */
 exports.getFinancialSummary = async (req, res) => {
   try {
@@ -340,10 +347,28 @@ exports.getFinancialSummary = async (req, res) => {
     let unpaidDamageFees = 0;
 
     allReturned.forEach(req => {
-      const lateFee = req.lateFee || 0;
+      // 🔧 RECALCULATE late fee with correct formula
+      let correctLateFee = 0;
+      if (req.dueDate && req.returnDate) {
+        const dueDate = new Date(req.dueDate);
+        const returnDate = new Date(req.returnDate);
+        
+        // Strip time for accurate day calculation
+        const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+        const returnDateOnly = new Date(returnDate.getFullYear(), returnDate.getMonth(), returnDate.getDate());
+        
+        if (returnDateOnly > dueDateOnly) {
+          const diffDays = Math.ceil((returnDateOnly - dueDateOnly) / (1000 * 60 * 60 * 24));
+          correctLateFee = diffDays * 5;
+        }
+      } else {
+        // Fallback to stored value if dates are missing
+        correctLateFee = req.lateFee || 0;
+      }
+      
       const damageFee = req.damageFee || 0;
       
-      totalLateFees += lateFee;
+      totalLateFees += correctLateFee;
       totalDamageFees += damageFee;
       
       if (req.bookCondition === "lost") {
@@ -351,13 +376,13 @@ exports.getFinancialSummary = async (req, res) => {
       }
 
       if (req.paid) {
-        collectedLateFees += lateFee;
+        collectedLateFees += correctLateFee;
         collectedDamageFees += damageFee;
         if (req.bookCondition === "lost") {
           collectedLostBookFees += damageFee;
         }
       } else {
-        unpaidLateFees += lateFee;
+        unpaidLateFees += correctLateFee;
         unpaidDamageFees += damageFee;
       }
     });
@@ -385,7 +410,6 @@ exports.getFinancialSummary = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
 /**
  * Get book condition report
  */
@@ -500,8 +524,10 @@ exports.getLostBooks = async (req, res) => {
   }
 };
 
+
 /**
  * Get students with outstanding fees
+ * 🔧 FIXED: Recalculates late fees with correct formula
  */
 exports.getStudentsWithFees = async (req, res) => {
   try {
@@ -525,6 +551,25 @@ exports.getStudentsWithFees = async (req, res) => {
       const studentId = req.student?.studentId || "Unknown";
       const studentName = `${req.student?.firstName || ""} ${req.student?.lastName || ""}`.trim();
       
+      // 🔧 RECALCULATE late fee with correct formula
+      let correctLateFee = 0;
+      if (req.dueDate && req.returnDate) {
+        const dueDate = new Date(req.dueDate);
+        const returnDate = new Date(req.returnDate);
+        
+        // Strip time for accurate day calculation
+        const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+        const returnDateOnly = new Date(returnDate.getFullYear(), returnDate.getMonth(), returnDate.getDate());
+        
+        if (returnDateOnly > dueDateOnly) {
+          const diffDays = Math.ceil((returnDateOnly - dueDateOnly) / (1000 * 60 * 60 * 24));
+          correctLateFee = diffDays * 5;
+        }
+      } else {
+        // Fallback to stored value if dates are missing
+        correctLateFee = req.lateFee || 0;
+      }
+      
       if (!studentFeesMap[studentId]) {
         studentFeesMap[studentId] = {
           studentId,
@@ -535,9 +580,9 @@ exports.getStudentsWithFees = async (req, res) => {
         };
       }
       
-      studentFeesMap[studentId].lateFee += req.lateFee || 0;
+      studentFeesMap[studentId].lateFee += correctLateFee;
       studentFeesMap[studentId].damageFee += req.damageFee || 0;
-      studentFeesMap[studentId].totalDue += (req.lateFee || 0) + (req.damageFee || 0);
+      studentFeesMap[studentId].totalDue += correctLateFee + (req.damageFee || 0);
     });
 
     const result = Object.values(studentFeesMap).sort((a, b) => b.totalDue - a.totalDue);
@@ -548,7 +593,6 @@ exports.getStudentsWithFees = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
 /**
  * Get damage analysis breakdown
  */

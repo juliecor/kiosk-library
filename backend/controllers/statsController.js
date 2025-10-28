@@ -8,20 +8,23 @@ exports.getDashboardStats = async (req, res) => {
     const totalBooks = await Book.countDocuments({ isDeleted: false });
     const totalStudents = await Student.countDocuments();
     const pendingRequests = await BorrowedRequest.countDocuments({ status: "pending" });
-    const activeBorrows = await BorrowedRequest.countDocuments({ status: "approved" });
-
+   
+    const activeBorrows = await BorrowedRequest.countDocuments({ 
+    status: { $in: ["approved", "overdue"] },
+     returnDate: null
+});
     const now = new Date();
-    const approvedRequests = await BorrowedRequest.find({ status: "approved" });
-    let overdueCount = 0;
     
-    approvedRequests.forEach(request => {
-      const borrowDate = new Date(request.borrowDate || request.createdAt);
-      const dueDate = new Date(borrowDate);
-      dueDate.setDate(dueDate.getDate() + 1);
-      
-      if (now > dueDate) {
-        overdueCount++;
-      }
+    // 🔧 FIXED: Count ALL overdue books (status "overdue" OR past due date)
+    const overdueCount = await BorrowedRequest.countDocuments({
+      $or: [
+        { status: "overdue" },  // Books already marked as overdue by cron
+        {
+          status: { $in: ["approved", "pending"] },  // Or books that are approved/pending but past due
+          dueDate: { $lt: now },
+          returnDate: null
+        }
+      ]
     });
 
     const unpaidFees = await BorrowedRequest.find({ 
@@ -43,8 +46,11 @@ exports.getDashboardStats = async (req, res) => {
     const totalCopies = allBooks.reduce((sum, book) => sum + book.totalCopies, 0);
     const availableCopies = allBooks.reduce((sum, book) => sum + book.availableCopies, 0);
     
-    // FIXED: Count actual approved borrows instead of calculating from inventory
-    const borrowedCopies = await BorrowedRequest.countDocuments({ status: "approved" });
+    // Count actual approved + overdue borrows
+    const borrowedCopies = await BorrowedRequest.countDocuments({ 
+      status: { $in: ["approved", "overdue"] },
+      returnDate: null
+    });
 
     res.json({
       success: true,

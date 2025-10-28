@@ -1,10 +1,12 @@
 // backend/controllers/bookController.js
 const Book = require("../models/book");
+const StockHistory = require("../models/stockHistory"); // ADD THIS IMPORT
 
 /**
  * Create a new book
  */
 exports.createBook = async (req, res) => {
+  
   try {
     const { 
       title, author, ISBN, category, volume, publisher, 
@@ -32,6 +34,34 @@ exports.createBook = async (req, res) => {
     });
 
     await newBook.save();
+
+    // ✅ LOG STOCK HISTORY FOR NEW BOOK
+    try {
+      // JWT stores admin ID as 'id' (not '_id')
+      const adminId = req.admin.id;
+      const adminName = req.admin.fullName || req.admin.username || "Library Admin";
+
+      const historyEntry = await StockHistory.create({
+        book: newBook._id,
+        bookTitle: newBook.title,
+        author: newBook.author,
+        action: "add",
+        quantity: parseInt(totalCopies) || 1,
+        reason: "new-purchase",
+        notes: `Initial book addition to library${description ? `: ${description.substring(0, 100)}` : ''}`,
+        previousAvailable: 0,
+        previousTotal: 0,
+        newAvailable: parseInt(availableCopies) || 1,
+        newTotal: parseInt(totalCopies) || 1,
+        admin: adminId,
+        adminName: adminName
+      });
+      console.log(`✅ Stock history logged successfully for: ${newBook.title}`);
+    } catch (historyError) {
+      console.error("❌ Failed to log stock history:", historyError.message);
+      // Don't fail the whole request if history logging fails
+    }
+
     res.status(201).json({ success: true, message: "Book added successfully", book: newBook });
   } catch (error) {
     console.error("createBook error:", error);
@@ -194,8 +224,42 @@ exports.getBookById = async (req, res) => {
 exports.deleteBook = async (req, res) => {
   try {
     const { id } = req.params;
-    const book = await Book.findByIdAndUpdate(id, { isDeleted: true }, { new: true });
-    if (!book) return res.status(404).json({ success: false, message: "Book not found" });
+    const book = await Book.findById(id);
+    
+    if (!book) {
+      return res.status(404).json({ success: false, message: "Book not found" });
+    }
+
+    // Mark book as deleted
+    book.isDeleted = true;
+    await book.save();
+
+    // ✅ LOG STOCK HISTORY FOR BOOK DELETION
+    try {
+      const adminId = req.admin.id;
+      const adminName = req.admin.fullName || req.admin.username || "Library Admin";
+
+      await StockHistory.create({
+        book: book._id,
+        bookTitle: book.title,
+        author: book.author,
+        action: "remove",
+        quantity: book.totalCopies, // Log total copies being removed
+        reason: "other",
+        notes: `Book removed from library system (soft delete)`,
+        previousAvailable: book.availableCopies,
+        previousTotal: book.totalCopies,
+        newAvailable: 0,
+        newTotal: 0,
+        admin: adminId,
+        adminName: adminName
+      });
+      console.log(`✅ Stock history logged for deleted book: ${book.title}`);
+    } catch (historyError) {
+      console.error("❌ Failed to log deletion history:", historyError.message);
+      // Don't fail the whole request if history logging fails
+    }
+
     res.json({ success: true, message: "Book deleted successfully" });
   } catch (error) {
     console.error("deleteBook error:", error);
@@ -218,8 +282,9 @@ exports.restoreBook = async (req, res) => {
   }
 };
 
-// In bookController.js - CORRECTED adjustStock function
-
+/**
+ * Adjust stock (with automatic history logging)
+ */
 exports.adjustStock = async (req, res) => {
   try {
     const { id } = req.params;
@@ -256,70 +321,47 @@ exports.adjustStock = async (req, res) => {
     let newTotal = book.totalCopies;
 
     if (type === "add") {
-      // ADDING copies back
       if (reason === "repair") {
-        // Repairing a damaged book
-        // The book was out of circulation, now it's fixed
-        // Only increase available, total stays same
         console.log("✅ REPAIR: Damaged book being fixed");
         newAvailable += adjustQty;
-        // newTotal stays same (you still own the same number of copies)
-        
       } else if (reason === "new-purchase" || reason === "new purchase") {
-        // New books being added to inventory
         console.log("✅ NEW PURCHASE: Adding new books");
         newAvailable += adjustQty;
         newTotal += adjustQty;
-        
       } else {
-        // Generic "other" add - assume new books
         console.log("✅ ADD OTHER: Adding copies");
         newAvailable += adjustQty;
         newTotal += adjustQty;
       }
-
     } else if (type === "remove") {
-      // REMOVING copies
       if (reason === "damaged" || reason === "destroyed") {
-        // Permanently removing damaged/destroyed books from inventory
-        // Check if we have enough total copies
         console.log("❌ DAMAGED/DESTROYED: Permanently removing");
-        
         if (adjustQty > book.totalCopies) {
           return res.status(400).json({
             success: false,
             message: `Cannot remove ${adjustQty} copies. Only ${book.totalCopies} total copies exist.`
           });
         }
-        
         newTotal -= adjustQty;
         newAvailable = Math.max(0, newAvailable - adjustQty);
-        
       } else if (reason === "lost") {
-        // Lost books - permanently remove
         console.log("❌ LOST: Permanently removing");
-        
         if (adjustQty > book.totalCopies) {
           return res.status(400).json({
             success: false,
             message: `Cannot remove ${adjustQty} copies. Only ${book.totalCopies} total copies exist.`
           });
         }
-        
         newTotal -= adjustQty;
         newAvailable = Math.max(0, newAvailable - adjustQty);
-        
       } else {
-        // Generic correction - just adjust available
         console.log("⚠️ CORRECTION: Adjusting available copies");
-        
         if (adjustQty > book.availableCopies) {
           return res.status(400).json({
             success: false,
             message: `Cannot remove ${adjustQty} copies. Only ${book.availableCopies} available.`
           });
         }
-        
         newAvailable -= adjustQty;
       }
     }
@@ -340,8 +382,6 @@ exports.adjustStock = async (req, res) => {
     }
 
     if (newAvailable > newTotal) {
-      console.log("❌ VALIDATION ERROR: Available exceeds Total");
-      console.log("   Available:", newAvailable, "Total:", newTotal);
       return res.status(400).json({
         success: false,
         message: `Available copies (${newAvailable}) cannot exceed total copies (${newTotal})`
@@ -357,17 +397,33 @@ exports.adjustStock = async (req, res) => {
       totalCopies: newTotal
     };
 
-    // Add adjustment history note to description
-    if (notes) {
-      const timestamp = new Date().toLocaleString();
-      const adjustmentLog = `\n[${timestamp}] ${type.toUpperCase()} ${adjustQty} (${reason}): ${notes}`;
-      updateData.description = (book.description || "") + adjustmentLog;
-    }
-
     const updatedBook = await Book.findByIdAndUpdate(id, updateData, { new: true });
 
+    // ✅ LOG STOCK HISTORY (This already exists in your InventorySection.js frontend)
+    // But if you want to do it here on backend, uncomment below:
+    /*
+    try {
+      await StockHistory.create({
+        book: book._id,
+        bookTitle: book.title,
+        author: book.author,
+        action: type,
+        quantity: adjustQty,
+        reason: reason,
+        notes: notes || "",
+        previousAvailable: book.availableCopies,
+        previousTotal: book.totalCopies,
+        newAvailable: newAvailable,
+        newTotal: newTotal,
+        admin: req.admin._id,
+        adminName: req.admin.fullName || req.admin.email || "Library Admin"
+      });
+    } catch (historyError) {
+      console.error("Failed to log stock history:", historyError);
+    }
+    */
+
     console.log("✅ Book updated successfully");
-    console.log("   Result - Total:", updatedBook.totalCopies, "Available:", updatedBook.availableCopies);
 
     res.json({
       success: true,

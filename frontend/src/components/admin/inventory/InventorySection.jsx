@@ -1,9 +1,25 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { 
-  Package, TrendingUp, TrendingDown, AlertTriangle, Search, Download, 
-  ArrowUpDown, X, Eye, Clock, CheckCircle, XCircle, AlertCircle as AlertCircleIcon,
-  Plus, Minus, Wrench, Settings, History, BookOpen
+import {
+  Package,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  Search,
+  Download,
+  ArrowUpDown,
+  X,
+  Eye,
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Plus,
+  Minus,
+  Wrench,
+  Settings,
+  History,
+  BookOpen
 } from "lucide-react";
 import "./InventorySection.css";
 
@@ -22,9 +38,6 @@ function InventorySection() {
   const [notification, setNotification] = useState(null);
   const [activeTab, setActiveTab] = useState("inventory");
   const [stockHistory, setStockHistory] = useState([]);
-  const [repairs, setRepairs] = useState([]);
-  const [lostBooks, setLostBooks] = useState([]);
-  const [damagedBooks, setDamagedBooks] = useState([]);
   const [historyFilter, setHistoryFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -42,25 +55,23 @@ function InventorySection() {
     borrowedCopies: 0,
     lowStockCount: 0,
     outOfStockCount: 0,
-    damagedCount: 0,
     recentLostCount: 0,
     recentRepairs: 0,
   });
 
+  // fetch books and combined history when pagination/filter/search changes
   useEffect(() => {
     fetchBooks();
-    fetchStockHistory();
+    fetchCombinedHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, filter, searchQuery]);
 
-  // Fetch data when tabs change
+  // Fetch combined history when history tab is active
   useEffect(() => {
-    if (activeTab === "repairs") {
-      fetchRepairs();
-    } else if (activeTab === "lost") {
-      fetchLostBooks();
-    } else if (activeTab === "history") {
-      fetchStockHistory();
+    if (activeTab === "history") {
+      fetchCombinedHistory();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const fetchBooks = async () => {
@@ -71,111 +82,141 @@ function InventorySection() {
       if (filter === "low-stock") query += "&status=low-stock";
       if (filter === "out-of-stock") query += "&status=out-of-stock";
       if (searchQuery) query += `&search=${encodeURIComponent(searchQuery)}`;
-      
+
       const response = await axios.get(`http://localhost:5000/api/books${query}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
-      if (response.data.success) {
-        setBooks(response.data.books);
+
+      if (response.data?.success) {
+        const bookData = response.data.books || [];
+        setBooks(bookData);
         if (response.data.pagination) {
           setTotalPages(response.data.pagination.pages);
         }
-        await calculateStats(response.data.books);
+        await calculateStats(bookData);
+      } else {
+        console.warn("fetchBooks - unexpected response", response.data);
+        setBooks([]);
+        await calculateStats([]);
       }
     } catch (error) {
       console.error("Error fetching books:", error);
       showNotification("Failed to fetch books", "error");
+      setBooks([]);
+      await calculateStats([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchStockHistory = async () => {
+  const fetchCombinedHistory = async () => {
     try {
       const token = localStorage.getItem("adminToken");
-      const response = await axios.get("http://localhost:5000/api/inventory/stock-history", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
       
-      if (response.data.success) {
-        setStockHistory(response.data.history);
+      // Fetch from multiple endpoints
+      const [stockHistoryResponse, lostBooksResponse, damagedBooksResponse] = await Promise.all([
+        axios.get("http://localhost:5000/api/inventory/stock-history", {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => ({ data: { success: false, history: [] } })),
+        axios.get("http://localhost:5000/api/reports/lost-books", {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => ({ data: { success: false, data: [] } })),
+        axios.get("http://localhost:5000/api/reports/damaged-books", {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => ({ data: { success: false, data: [] } }))
+      ]);
+
+      let combinedHistory = [];
+
+      // Add stock history (repairs, adjustments, etc.)
+      if (stockHistoryResponse.data?.success) {
+        const stockHistoryData = stockHistoryResponse.data.history || [];
+        combinedHistory = [...combinedHistory, ...stockHistoryData.map(item => ({
+          ...item,
+          source: 'stockHistory'
+        }))];
       }
+
+      // Add lost books
+      if (lostBooksResponse.data?.success) {
+        const lostBooks = lostBooksResponse.data.data || lostBooksResponse.data.lostBooks || lostBooksResponse.data;
+        const lostHistory = lostBooks.map(lost => ({
+          _id: lost._id || `lost_${Math.random()}`,
+          date: lost.lostDate || lost.date || lost.returnDate || lost.createdAt,
+          bookTitle: lost.bookTitle,
+          action: "remove",
+          quantity: lost.quantity || 1,
+          reason: "lost",
+          notes: lost.damageDescription || "Book reported as lost",
+          previousAvailable: lost.previousAvailable || 0,
+          newAvailable: lost.newAvailable || 0,
+          previousTotal: lost.previousTotal || 0,
+          newTotal: lost.newTotal || 0,
+          fullName: lost.fullName || "Library Admin",
+          source: 'lostBooks',
+          studentName: lost.studentName || (lost.student ? `${lost.student.firstName || ""} ${lost.student.lastName || ""}`.trim() : "Unknown"),
+          paid: lost.paid || false
+        }));
+        combinedHistory = [...combinedHistory, ...lostHistory];
+      }
+
+      // Add damaged books
+      if (damagedBooksResponse.data?.success) {
+        const damagedBooks = damagedBooksResponse.data.data || damagedBooksResponse.data.damagedBooks || damagedBooksResponse.data;
+        const damagedHistory = damagedBooks.map(damaged => ({
+          _id: damaged._id || `damaged_${Math.random()}`,
+          date: damaged.returnDate || damaged.date || damaged.createdAt,
+          bookTitle: damaged.bookTitle,
+          action: "remove",
+          quantity: damaged.quantity || 1,
+          reason: "damaged",
+          notes: damaged.damageDescription || "Book reported as damaged",
+          previousAvailable: damaged.previousAvailable || 0,
+          newAvailable: damaged.newAvailable || 0,
+          previousTotal: damaged.previousTotal || 0,
+          newTotal: damaged.newTotal || 0,
+          adminName: damaged.adminName || "Library Admin",
+          source: 'damagedBooks',
+          studentName: damaged.studentName || (damaged.student ? `${damaged.student.firstName || ""} ${damaged.student.lastName || ""}`.trim() : "Unknown"),
+          damageLevel: damaged.damageLevel,
+          damageFee: damaged.damageFee
+        }));
+        combinedHistory = [...combinedHistory, ...damagedHistory];
+      }
+
+      // Sort by date (newest first)
+      combinedHistory.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+      
+      console.log("Combined history:", combinedHistory);
+      setStockHistory(combinedHistory);
     } catch (error) {
-      console.error("Error fetching stock history:", error);
+      console.error("Error fetching combined history:", error);
+      showNotification("Failed to fetch history data", "error");
       setStockHistory([]);
-    }
-  };
-
-  const fetchRepairs = async () => {
-    try {
-      const token = localStorage.getItem("adminToken");
-      const response = await axios.get("http://localhost:5000/api/inventory/repairs", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      
-      if (response.data.success) {
-        setRepairs(response.data.repairs);
-      }
-    } catch (error) {
-      console.error("Error fetching repairs:", error);
-      setRepairs([]);
-    }
-  };
-
-  const fetchLostBooks = async () => {
-    try {
-      const token = localStorage.getItem("adminToken");
-      const response = await axios.get("http://localhost:5000/api/inventory/lost-books", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      
-      if (response.data.success) {
-        setLostBooks(response.data.lostBooks);
-      }
-    } catch (error) {
-      console.error("Error fetching lost books:", error);
-      setLostBooks([]);
-    }
-  };
-
-  const fetchDamagedBooks = async () => {
-    try {
-      const token = localStorage.getItem("adminToken");
-      const response = await axios.get("http://localhost:5000/api/inventory/damaged-books", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      
-      if (response.data.success) {
-        setDamagedBooks(response.data.damagedBooks);
-      }
-    } catch (error) {
-      console.error("Error fetching damaged books:", error);
-      setDamagedBooks([]);
     }
   };
 
   const fetchBookHistory = async (bookId) => {
     setHistoryLoading(true);
     setBorrowHistory([]);
-    
+
     try {
       const token = localStorage.getItem("adminToken");
-      
+
       const response = await axios.get("http://localhost:5000/api/borrow/requests", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
-      if (response.data.success && response.data.requests) {
+
+      if (response.data?.success && response.data.requests) {
         const bookRequests = response.data.requests.filter(req => {
           if (!req.book) return false;
           const reqBookId = typeof req.book === 'string' ? req.book : req.book._id;
           return reqBookId === bookId;
         });
-        
+
         bookRequests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setBorrowHistory(bookRequests);
-        
+
         if (bookRequests.length === 0) {
           console.log("No borrow history found for this book");
         }
@@ -193,52 +234,70 @@ function InventorySection() {
 
   const calculateStats = async (booksData) => {
     const totalBooks = booksData.length;
-    const totalCopies = booksData.reduce((sum, book) => sum + book.totalCopies, 0);
-    const availableCopies = booksData.reduce((sum, book) => sum + book.availableCopies, 0);
-    
-    let borrowedCopies = 0;
-    try {
-      const token = localStorage.getItem("adminToken");
-      const response = await axios.get("http://localhost:5000/api/borrow/requests", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      
-      if (response.data.success) {
-        borrowedCopies = response.data.requests.filter((req) => req.status === "approved").length;
-      }
-    } catch (error) {
-      console.error("Error fetching borrowed requests:", error);
-      borrowedCopies = totalCopies - availableCopies;
-    }
-    
-    const lowStockCount = booksData.filter((book) => book.availableCopies > 0 && book.availableCopies <= 3).length;
-    const outOfStockCount = booksData.filter((book) => book.availableCopies === 0).length;
+    const totalCopies = booksData.reduce((sum, book) => sum + (book.totalCopies || 0), 0);
+    const availableCopies = booksData.reduce((sum, book) => sum + (book.availableCopies || 0), 0);
 
+    let borrowedCopies = 0;
     let recentLostCount = 0;
     let recentRepairs = 0;
+
     try {
       const token = localStorage.getItem("adminToken");
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
+
       const response = await axios.get("http://localhost:5000/api/borrow/requests", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
-      if (response.data.success) {
+
+      if (response.data?.success) {
+        borrowedCopies = response.data.requests.filter(
+          (req) => req.status === "approved" || req.status === "overdue"
+        ).length;
+
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
         recentLostCount = response.data.requests.filter(
-          (req) => req.bookCondition === "lost" && req.returnDate && new Date(req.returnDate) >= sevenDaysAgo
+          (req) => req.bookCondition === "lost" &&
+            (req.returnDate || req.lostDate) &&
+            new Date(req.returnDate || req.lostDate) >= sevenDaysAgo
         ).length;
       }
 
-      recentRepairs = stockHistory.filter((h) => h.reason === "repair" && new Date(h.date) >= sevenDaysAgo).length;
+      const historyResponse = await axios.get("http://localhost:5000/api/inventory/stock-history", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (historyResponse.data?.success) {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        recentRepairs = historyResponse.data.history.filter(
+          (h) => h.reason === "repair" && new Date(h.date) >= sevenDaysAgo
+        ).length;
+      }
+
     } catch (error) {
       console.error("Error calculating stats:", error);
+      borrowedCopies = totalCopies - availableCopies; // fallback
     }
 
+    const lowStockCount = booksData.filter((book) =>
+      (book.availableCopies || 0) > 0 && (book.availableCopies || 0) <= 3
+    ).length;
+
+    const outOfStockCount = booksData.filter((book) =>
+      (book.availableCopies || 0) === 0
+    ).length;
+
     setStats({
-      totalBooks, totalCopies, availableCopies, borrowedCopies,
-      lowStockCount, outOfStockCount, damagedCount: 0, recentLostCount, recentRepairs,
+      totalBooks,
+      totalCopies,
+      availableCopies,
+      borrowedCopies,
+      lowStockCount,
+      outOfStockCount,
+      recentLostCount,
+      recentRepairs,
     });
   };
 
@@ -254,8 +313,8 @@ function InventorySection() {
 
     try {
       const token = localStorage.getItem("adminToken");
-      const adjustment = parseInt(adjustmentForm.quantity);
-      
+      const adjustment = parseInt(adjustmentForm.quantity, 10) || 0;
+
       let newAvailable = selectedBook.availableCopies;
       let newTotal = selectedBook.totalCopies;
 
@@ -269,7 +328,7 @@ function InventorySection() {
       } else {
         if (adjustmentForm.reason === "damaged" || adjustmentForm.reason === "lost") {
           newTotal -= adjustment;
-          newAvailable = Math.max(0, newAvailable - adjustment);
+          totalCopies = Math.max(0, totalCopies - adjustment);
         } else {
           newAvailable -= adjustment;
         }
@@ -290,15 +349,15 @@ function InventorySection() {
 
       const response = await axios.put(
         `http://localhost:5000/api/books/${selectedBook._id}`,
-        { 
-          availableCopies: newAvailable, 
+        {
+          availableCopies: newAvailable,
           totalCopies: newTotal,
           status: newAvailable === 0 ? "borrowed" : "available"
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Log stock movement to backend
+      // Log stock history
       try {
         await axios.post(
           "http://localhost:5000/api/inventory/stock-history",
@@ -314,6 +373,7 @@ function InventorySection() {
             previousTotal: selectedBook.totalCopies,
             newAvailable: newAvailable,
             newTotal: newTotal,
+            adminName: "Library Admin"
           },
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -321,19 +381,15 @@ function InventorySection() {
         console.log("Stock history logging failed:", historyError);
       }
 
-      if (response.data.success) {
+      if (response.data?.success) {
         showNotification(`Stock adjusted successfully`, "success");
         setShowAdjustModal(false);
         setAdjustmentForm({ type: "add", quantity: 1, reason: "correction", notes: "" });
-        fetchBooks();
-        fetchStockHistory();
-        
-        // Refresh current tab data
-        if (activeTab === "repairs") {
-          fetchRepairs();
-        } else if (activeTab === "lost") {
-          fetchLostBooks();
-        }
+        await fetchBooks();
+        await fetchCombinedHistory();
+      } else {
+        console.warn("handleAdjustStock - unexpected response", response.data);
+        showNotification("Failed to adjust stock", "error");
       }
     } catch (error) {
       console.error("Error adjusting stock:", error);
@@ -347,14 +403,14 @@ function InventorySection() {
   };
 
   const getStockStatus = (available, total) => {
-    if (available === 0) return { text: "Out of Stock", color: "#ef4444", bg: "#fee2e2" };
-    if (available <= 3) return { text: "Low Stock", color: "#f59e0b", bg: "#fef3c7" };
+    if ((available || 0) === 0) return { text: "Out of Stock", color: "#ef4444", bg: "#fee2e2" };
+    if ((available || 0) <= 3) return { text: "Low Stock", color: "#f59e0b", bg: "#fef3c7" };
     return { text: "In Stock", color: "#10b981", bg: "#d1fae5" };
   };
 
   const getConditionIcon = (condition) => {
     if (condition === "good") return <CheckCircle size={16} color="#10b981" />;
-    if (condition === "damaged") return <AlertCircleIcon size={16} color="#f59e0b" />;
+    if (condition === "damaged") return <AlertCircle size={16} color="#f59e0b" />;
     if (condition === "lost") return <XCircle size={16} color="#ef4444" />;
     return null;
   };
@@ -371,17 +427,17 @@ function InventorySection() {
     let filtered = [...books];
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(book => 
-        book.title?.toLowerCase().includes(query) ||
-        book.author?.toLowerCase().includes(query) ||
-        book.ISBN?.toLowerCase().includes(query) ||
-        book.category?.toLowerCase().includes(query)
+      filtered = filtered.filter(book =>
+        (book.title || "").toLowerCase().includes(query) ||
+        (book.author || "").toLowerCase().includes(query) ||
+        (book.ISBN || "").toLowerCase().includes(query) ||
+        (book.category || "").toLowerCase().includes(query)
       );
     }
     if (filter === "low-stock") {
-      filtered = filtered.filter(book => book.availableCopies > 0 && book.availableCopies <= 3);
+      filtered = filtered.filter(book => (book.availableCopies || 0) > 0 && (book.availableCopies || 0) <= 3);
     } else if (filter === "out-of-stock") {
-      filtered = filtered.filter(book => book.availableCopies === 0);
+      filtered = filtered.filter(book => (book.availableCopies || 0) === 0);
     }
     return filtered;
   };
@@ -389,11 +445,11 @@ function InventorySection() {
   const filteredAndSearchedBooks = getFilteredBooks().sort((a, b) => {
     let compareValue = 0;
     switch (sortBy) {
-      case "title": compareValue = a.title.localeCompare(b.title); break;
-      case "author": compareValue = a.author.localeCompare(b.author); break;
-      case "available": compareValue = a.availableCopies - b.availableCopies; break;
-      case "total": compareValue = a.totalCopies - b.totalCopies; break;
-      case "borrowed": compareValue = (a.totalCopies - a.availableCopies) - (b.totalCopies - b.availableCopies); break;
+      case "title": compareValue = (a.title || "").localeCompare(b.title || ""); break;
+      case "author": compareValue = (a.author || "").localeCompare(b.author || ""); break;
+      case "available": compareValue = (a.availableCopies || 0) - (b.availableCopies || 0); break;
+      case "total": compareValue = (a.totalCopies || 0) - (b.totalCopies || 0); break;
+      case "borrowed": compareValue = ((a.totalCopies || 0) - (a.availableCopies || 0)) - ((b.totalCopies || 0) - (b.availableCopies || 0)); break;
       default: compareValue = 0;
     }
     return sortOrder === "asc" ? compareValue : -compareValue;
@@ -403,8 +459,8 @@ function InventorySection() {
     let filtered = [...stockHistory];
     if (historyFilter === "repairs") filtered = filtered.filter(h => h.reason === "repair");
     else if (historyFilter === "lost") filtered = filtered.filter(h => h.reason === "lost");
+    else if (historyFilter === "damaged") filtered = filtered.filter(h => h.reason === "damaged");
     else if (historyFilter === "additions") filtered = filtered.filter(h => h.action === "add");
-    else if (historyFilter === "removals") filtered = filtered.filter(h => h.action === "remove");
     return filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
   };
 
@@ -415,27 +471,27 @@ function InventorySection() {
       if (!booksByCategory[category]) booksByCategory[category] = [];
       booksByCategory[category].push(book);
     });
-    
+
     let csvContent = "BENEDICTO COLLEGE LIBRARY - INVENTORY REPORT\n";
     csvContent += `Generated: ${new Date().toLocaleString()}\n\n`;
-    
+
     Object.keys(booksByCategory).sort().forEach((category) => {
       csvContent += `\nCATEGORY: ${category}\n`;
       csvContent += "Title,Author,ISBN,Total Copies,Available,Borrowed,Status\n";
-      
+
       booksByCategory[category].forEach((book) => {
-        const borrowed = book.totalCopies - book.availableCopies;
+        const borrowed = (book.totalCopies || 0) - (book.availableCopies || 0);
         const status = getStockStatus(book.availableCopies, book.totalCopies);
-        csvContent += `"${book.title}","${book.author}","${book.ISBN || "N/A"}",${book.totalCopies},${book.availableCopies},${borrowed},"${status.text}"\n`;
+        csvContent += `"${book.title || ""}","${book.author || ""}","${book.ISBN || "N/A"}",${book.totalCopies || 0},${book.availableCopies || 0},${borrowed},"${status.text}"\n`;
       });
-      
-      const categoryTotal = booksByCategory[category].reduce((sum, b) => sum + b.totalCopies, 0);
-      const categoryAvailable = booksByCategory[category].reduce((sum, b) => sum + b.availableCopies, 0);
+
+      const categoryTotal = booksByCategory[category].reduce((sum, b) => sum + (b.totalCopies || 0), 0);
+      const categoryAvailable = booksByCategory[category].reduce((sum, b) => sum + (b.availableCopies || 0), 0);
       csvContent += `SUBTOTAL,${booksByCategory[category].length} books,,,${categoryTotal},${categoryAvailable},${categoryTotal - categoryAvailable},\n`;
     });
-    
+
     csvContent += `\nGRAND TOTAL,${filteredAndSearchedBooks.length} books,,,${stats.totalCopies},${stats.availableCopies},${stats.borrowedCopies},\n`;
-    
+
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -444,7 +500,7 @@ function InventorySection() {
   };
 
   const exportHistoryToCSV = () => {
-    const headers = ["Date", "Book Title", "Action", "Quantity", "Reason", "Notes", "Previous", "New", "Admin"];
+    const headers = ["Date", "Book Title", "Action", "Quantity", "Reason", "Notes", "Admin"];
     const rows = getFilteredHistory().map((h) => [
       new Date(h.date).toLocaleString(),
       `"${h.bookTitle}"`,
@@ -452,11 +508,9 @@ function InventorySection() {
       h.quantity,
       h.reason,
       `"${h.notes || ""}"`,
-      h.previousAvailable,
-      h.newAvailable,
-      h.adminName || "System"
+      h.adminName || "Library Admin"
     ]);
-    
+
     const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
@@ -514,7 +568,7 @@ function InventorySection() {
               {stats.recentLostCount > 0 && (
                 <button
                   className="alert-link lost"
-                  onClick={() => setActiveTab("lost")}
+                  onClick={() => { setActiveTab("history"); setHistoryFilter("lost"); }}
                 >
                   {stats.recentLostCount} book{stats.recentLostCount !== 1 ? "s" : ""} lost in last 7 days
                 </button>
@@ -530,13 +584,13 @@ function InventorySection() {
         <SummaryCard title="Available" value={stats.availableCopies} icon={<TrendingUp size={24} />} color="#10b981" bgColor="#d1fae5" />
         <SummaryCard title="Borrowed" value={stats.borrowedCopies} icon={<TrendingDown size={24} />} color="#f59e0b" bgColor="#fef3c7" />
         <SummaryCard title="Low Stock" value={stats.lowStockCount} icon={<AlertTriangle size={24} />} color="#f59e0b" bgColor="#fef3c7" />
-        <SummaryCard 
-          title="Recent Repairs" 
-          value={stats.recentRepairs} 
-          icon={<Wrench size={24} />} 
-          color="#10b981" 
+        <SummaryCard
+          title="Recent Repairs"
+          value={stats.recentRepairs}
+          icon={<Wrench size={24} />}
+          color="#10b981"
           bgColor="#d1fae5"
-          onClick={() => setActiveTab("repairs")}
+          onClick={() => { setActiveTab("history"); setHistoryFilter("repairs"); }}
           clickable={true}
         />
       </div>
@@ -548,12 +602,6 @@ function InventorySection() {
           </button>
           <button className={`tab-button ${activeTab === "history" ? "active" : ""}`} onClick={() => setActiveTab("history")}>
             <History size={18} /> Stock History ({stockHistory.length})
-          </button>
-          <button className={`tab-button ${activeTab === "repairs" ? "active" : ""}`} onClick={() => setActiveTab("repairs")}>
-            <Wrench size={18} /> Repairs ({repairs.length})
-          </button>
-          <button className={`tab-button ${activeTab === "lost" ? "active" : ""}`} onClick={() => setActiveTab("lost")}>
-            <XCircle size={18} /> Lost Books ({lostBooks.length})
           </button>
         </div>
       </div>
@@ -590,10 +638,6 @@ function InventorySection() {
         />
       )}
 
-      {activeTab === "repairs" && <RepairsTab repairs={repairs} />}
-
-      {activeTab === "lost" && <LostBooksTab lostBooks={lostBooks} />}
-
       {showModal && selectedBook && (
         <BookDetailModal
           selectedBook={selectedBook}
@@ -621,7 +665,7 @@ function InventorySection() {
 // Summary Card Component
 function SummaryCard({ title, value, icon, color, bgColor, onClick, clickable }) {
   return (
-    <div 
+    <div
       className={`summary-card ${clickable ? 'clickable' : ''}`}
       onClick={clickable ? onClick : undefined}
     >
@@ -637,7 +681,7 @@ function SummaryCard({ title, value, icon, color, bgColor, onClick, clickable })
 }
 
 // Inventory Tab Component
-function InventoryTab({ 
+function InventoryTab({
   loading, filteredAndSearchedBooks, filter, setFilter, setCurrentPage, stats,
   searchQuery, handleSearch, sortBy, handleSort, sortOrder, getStockStatus,
   handleBookClick, setSelectedBook, setShowAdjustModal, exportToCSV,
@@ -732,8 +776,8 @@ function InventoryTab({
               <tbody>
                 {filteredAndSearchedBooks.map((book) => {
                   const status = getStockStatus(book.availableCopies, book.totalCopies);
-                  const availabilityPercent = book.totalCopies > 0 
-                    ? (book.availableCopies / book.totalCopies) * 100 
+                  const availabilityPercent = book.totalCopies > 0
+                    ? (book.availableCopies / book.totalCopies) * 100
                     : 0;
 
                   return (
@@ -814,6 +858,31 @@ function InventoryTab({
 
 // Stock History Tab Component
 function StockHistoryTab({ stockHistory, historyFilter, setHistoryFilter, exportHistoryToCSV }) {
+  const getActionIcon = (action, reason) => {
+    if (reason === "repair") return <Wrench size={12} />;
+    if (reason === "lost") return <XCircle size={12} />;
+    if (reason === "damaged") return <AlertCircle size={12} />;
+    return action === "add" ? <Plus size={12} /> : <Minus size={12} />;
+  };
+
+  const getActionText = (action, reason) => {
+    if (reason === "repair") return "Repaired";
+    if (reason === "lost") return "Lost";
+    if (reason === "damaged") return "Damaged";
+    return action === "add" ? "Added" : "Removed";
+  };
+
+  const getReasonBadgeColor = (reason) => {
+    switch (reason) {
+      case "repair": return { bg: "#d1fae5", color: "#065f46" };
+      case "lost": return { bg: "#fee2e2", color: "#991b1b" };
+      case "damaged": return { bg: "#fef3c7", color: "#92400e" };
+      case "correction": return { bg: "#e0e7ff", color: "#3730a3" };
+      case "new-purchase": return { bg: "#ddd6fe", color: "#5b21b6" };
+      default: return { bg: "#f3f4f6", color: "#374151" };
+    }
+  };
+
   return (
     <div className="inventory-content">
       <div className="inventory-header">
@@ -825,14 +894,17 @@ function StockHistoryTab({ stockHistory, historyFilter, setHistoryFilter, export
       </div>
 
       <div className="filter-buttons">
-        {["all", "repairs", "lost", "additions", "removals"].map((f) => (
+        {["all", "repairs", "lost", "damaged", "additions"].map((f) => (
           <button
             key={f}
             className={`filter-btn ${historyFilter === f ? `active ${f}` : ""}`}
             onClick={() => setHistoryFilter(f)}
           >
-            {f === "all" ? "All" : f === "repairs" ? "Repairs Only" : 
-             f === "lost" ? "Lost Books" : f === "additions" ? "Additions" : "Removals"}
+            {f === "all" ? "All" : 
+             f === "repairs" ? "Repairs Only" :
+             f === "lost" ? "Lost Books" :
+             f === "damaged" ? "Damaged Books" :
+             "Additions"}
           </button>
         ))}
       </div>
@@ -851,228 +923,51 @@ function StockHistoryTab({ stockHistory, historyFilter, setHistoryFilter, export
                 <th>Action</th>
                 <th>Quantity</th>
                 <th>Reason</th>
-                <th>Previous → New</th>
                 <th>Notes</th>
                 <th>Admin</th>
               </tr>
             </thead>
             <tbody>
-              {stockHistory.map((history, index) => (
-                <tr key={index}>
-                  <td>
-                    <span style={{ fontSize: "13px", color: "#6b7280" }}>
-                      {new Date(history.date).toLocaleString()}
-                    </span>
-                  </td>
-                  <td><strong>{history.bookTitle}</strong></td>
-                  <td>
-                    <span className={`action-badge ${history.action}`}>
-                      {history.action === "add" ? <Plus size={12} /> : <Minus size={12} />}
-                      {history.action === "add" ? "Added" : "Removed"}
-                    </span>
-                  </td>
-                  <td><strong style={{ fontSize: "16px" }}>{history.quantity}</strong></td>
-                  <td>
-                    <span className={`reason-badge ${history.reason}`}>
-                      {history.reason}
-                    </span>
-                  </td>
-                  <td>
-                    <span style={{ fontSize: "13px", color: "#6b7280" }}>
-                      {history.previousAvailable} → <strong style={{ color: "#1f2937" }}>{history.newAvailable}</strong>
-                    </span>
-                  </td>
-                  <td>
-                    <span style={{ fontSize: "12px", color: "#6b7280" }}>{history.notes || "-"}</span>
-                  </td>
-                  <td>
-                    <span style={{ fontSize: "12px", color: "#6b7280" }}>{history.adminName || "System"}</span>
-                  </td>
-                </tr>
-              ))}
+              {stockHistory.map((history, index) => {
+                const reasonColors = getReasonBadgeColor(history.reason);
+                return (
+                  <tr key={index}>
+                    <td>
+                      <span style={{ fontSize: "13px", color: "#6b7280" }}>
+                        {history.date ? new Date(history.date).toLocaleString() : "-"}
+                      </span>
+                    </td>
+                    <td><strong>{history.bookTitle}</strong></td>
+                    <td>
+                      <span className={`action-badge ${history.action} ${history.reason}`}>
+                        {getActionIcon(history.action, history.reason)}
+                        {getActionText(history.action, history.reason)}
+                      </span>
+                    </td>
+                    <td><strong style={{ fontSize: "16px" }}>{history.quantity}</strong></td>
+                    <td>
+                      <span 
+                        className="reason-badge" 
+                        style={{ 
+                          backgroundColor: reasonColors.bg, 
+                          color: reasonColors.color 
+                        }}
+                      >
+                        {history.reason}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: "12px", color: "#6b7280" }}>{history.notes || "-"}</span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: "12px", color: "#6b7280" }}>{history.fullName || "Library Admin"}</span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-      )}
-    </div>
-  );
-}
-
-// Repairs Tab Component
-function RepairsTab({ repairs }) {
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  
-  const recentRepairs = repairs.filter(r => new Date(r.date) >= sevenDaysAgo).length;
-  const totalRepaired = repairs.reduce((sum, r) => sum + r.quantity, 0);
-
-  return (
-    <div className="inventory-content">
-      <h2>🔧 Repair History</h2>
-
-      {repairs.length === 0 ? (
-        <div className="empty-container">
-          <Wrench size={48} color="#d1d5db" style={{ marginBottom: "16px" }} />
-          <p>No repair records yet</p>
-        </div>
-      ) : (
-        <>
-          <div style={{ overflowX: "auto", marginBottom: "20px" }}>
-            <table className="inventory-table">
-              <thead>
-                <tr style={{ backgroundColor: "#d1fae5" }}>
-                  <th>Repair Date</th>
-                  <th>Book Title</th>
-                  <th>Quantity Repaired</th>
-                  <th>Previous Available</th>
-                  <th>New Available</th>
-                  <th>Notes</th>
-                  <th>Repaired By</th>
-                </tr>
-              </thead>
-              <tbody>
-                {repairs.map((repair, index) => (
-                  <tr key={index}>
-                    <td>
-                      <span style={{ fontSize: "14px", fontWeight: "500", color: "#10b981" }}>
-                        {new Date(repair.date).toLocaleDateString()}
-                      </span>
-                      <br />
-                      <span style={{ fontSize: "12px", color: "#6b7280" }}>
-                        {new Date(repair.date).toLocaleTimeString()}
-                      </span>
-                    </td>
-                    <td><strong>{repair.bookTitle}</strong></td>
-                    <td>
-                      <span style={{
-                        padding: "6px 12px", backgroundColor: "#d1fae5", color: "#065f46",
-                        borderRadius: "20px", fontSize: "16px", fontWeight: "700"
-                      }}>
-                        +{repair.quantity}
-                      </span>
-                    </td>
-                    <td>{repair.previousAvailable}</td>
-                    <td><strong style={{ color: "#10b981" }}>{repair.newAvailable}</strong></td>
-                    <td><span style={{ fontSize: "13px", color: "#6b7280" }}>{repair.notes || "No notes"}</span></td>
-                    <td><span style={{ fontSize: "13px", color: "#6b7280" }}>{repair.adminName || "System"}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="summary-box repair">
-            <h3>Summary</h3>
-            <div className="summary-stats">
-              <div className="summary-stat">
-                <p>Total Repairs</p>
-                <p>{repairs.length}</p>
-              </div>
-              <div className="summary-stat">
-                <p>Books Repaired</p>
-                <p>{totalRepaired}</p>
-              </div>
-              <div className="summary-stat">
-                <p>Last 7 Days</p>
-                <p>{recentRepairs}</p>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// Lost Books Tab Component
-function LostBooksTab({ lostBooks }) {
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  
-  const recentLost = lostBooks.filter(l => new Date(l.date) >= sevenDaysAgo).length;
-  const totalLost = lostBooks.reduce((sum, l) => sum + l.quantity, 0);
-
-  return (
-    <div className="inventory-content">
-      <h2>❌ Lost Books History</h2>
-
-      {lostBooks.length === 0 ? (
-        <div className="empty-container">
-          <CheckCircle size={48} color="#10b981" style={{ marginBottom: "16px" }} />
-          <p>No lost books recorded! 🎉</p>
-        </div>
-      ) : (
-        <>
-          <div style={{ overflowX: "auto", marginBottom: "20px" }}>
-            <table className="inventory-table">
-              <thead>
-                <tr style={{ backgroundColor: "#fee2e2" }}>
-                  <th>Lost Date</th>
-                  <th>Book Title</th>
-                  <th>Author</th>
-                  <th>Quantity Lost</th>
-                  <th>Previous Total</th>
-                  <th>New Total</th>
-                  <th>Notes</th>
-                  <th>Recorded By</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lostBooks.map((lost, index) => (
-                  <tr key={index}>
-                    <td>
-                      <span style={{ fontSize: "14px", fontWeight: "500", color: "#ef4444" }}>
-                        {new Date(lost.date).toLocaleDateString()}
-                      </span>
-                      <br />
-                      <span style={{ fontSize: "12px", color: "#6b7280" }}>
-                        {new Date(lost.date).toLocaleTimeString()}
-                      </span>
-                    </td>
-                    <td><strong>{lost.bookTitle}</strong></td>
-                    <td>{lost.author}</td>
-                    <td>
-                      <span style={{
-                        padding: "6px 12px", backgroundColor: "#fee2e2", color: "#991b1b",
-                        borderRadius: "20px", fontSize: "16px", fontWeight: "700"
-                      }}>
-                        -{lost.quantity}
-                      </span>
-                    </td>
-                    <td>{lost.previousTotal}</td>
-                    <td><strong style={{ color: "#ef4444" }}>{lost.newTotal}</strong></td>
-                    <td><span style={{ fontSize: "13px", color: "#6b7280" }}>{lost.notes || "No notes"}</span></td>
-                    <td><span style={{ fontSize: "13px", color: "#6b7280" }}>{lost.adminName || "System"}</span></td>
-                    <td>
-                      <span className={`payment-status ${lost.paid ? "paid" : "unpaid"}`}>
-                        {lost.paid ? "✅ Paid" : "⏳ Unpaid"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="summary-box lost">
-            <h3>Summary</h3>
-            <div className="summary-stats">
-              <div className="summary-stat">
-                <p>Total Incidents</p>
-                <p>{lostBooks.length}</p>
-              </div>
-              <div className="summary-stat">
-                <p>Total Books Lost</p>
-                <p>{totalLost}</p>
-              </div>
-              <div className="summary-stat">
-                <p>Last 7 Days</p>
-                <p>{recentLost}</p>
-              </div>
-            </div>
-          </div>
-        </>
       )}
     </div>
   );
@@ -1098,7 +993,7 @@ function BookDetailModal({ selectedBook, setShowModal, borrowHistory, historyLoa
             <p style={{ fontSize: "16px", color: "#6b7280", marginBottom: "16px" }}>
               by {selectedBook.author}
             </p>
-            
+
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px", marginBottom: "16px" }}>
               <InfoItem label="ISBN" value={selectedBook.ISBN || "N/A"} />
               <InfoItem label="Category" value={selectedBook.category || "N/A"} />
@@ -1108,11 +1003,11 @@ function BookDetailModal({ selectedBook, setShowModal, borrowHistory, historyLoa
           </div>
 
           <div style={{ backgroundColor: "#f9fafb", padding: "16px", borderRadius: "8px", marginBottom: "24px" }}>
-            <h4 style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: "600",color:"#0f1110ff" }}>Stock Information</h4>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: "600", color: "#0f1110ff" }}>Stock Information</h4>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
               <div>
                 <p style={{ margin: 0, fontSize: "12px", color: "#6b7280" }}>Total Copies</p>
-                <p style={{ margin: "4px 0 0 0", fontSize: "20px", fontWeight: "700", color:"#0f1110ff"}}>{selectedBook.totalCopies}</p>
+                <p style={{ margin: "4px 0 0 0", fontSize: "20px", fontWeight: "700", color: "#0f1110ff" }}>{selectedBook.totalCopies}</p>
               </div>
               <div>
                 <p style={{ margin: 0, fontSize: "12px", color: "#6b7280" }}>Available</p>
@@ -1131,19 +1026,19 @@ function BookDetailModal({ selectedBook, setShowModal, borrowHistory, historyLoa
 
           {borrowHistory.filter(req => req.status === "returned").length > 0 && (
             <div style={{ backgroundColor: "#f9fafb", padding: "16px", borderRadius: "8px", marginBottom: "24px" }}>
-              <h4 style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: "600",color:"#0f1110ff" }}>Return Condition Summary</h4>
+              <h4 style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: "600", color: "#0f1110ff" }}>Return Condition Summary</h4>
               <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <CheckCircle size={16} color="#10b981" />
-                  <span style={{ fontSize: "14px",color:"#0f1110ff" }}>Good: <strong>{getConditionStats().good}</strong></span>
+                  <span style={{ fontSize: "14px", color: "#0f1110ff" }}>Good: <strong>{getConditionStats().good}</strong></span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <AlertCircleIcon size={16} color="#f59e0b" />
-                  <span style={{ fontSize: "14px",color:"#0f1110ff" }}>Damaged: <strong>{getConditionStats().damaged}</strong></span>
+                  <AlertCircle size={16} color="#f59e0b" />
+                  <span style={{ fontSize: "14px", color: "#0f1110ff" }}>Damaged: <strong>{getConditionStats().damaged}</strong></span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <XCircle size={16} color="#ef4444" />
-                  <span style={{ fontSize: "14px", color:"#0f1110ff" }}>Lost: <strong>{getConditionStats().lost}</strong></span>
+                  <span style={{ fontSize: "14px", color: "#0f1110ff" }}>Lost: <strong>{getConditionStats().lost}</strong></span>
                 </div>
               </div>
             </div>
@@ -1173,10 +1068,10 @@ function BookDetailModal({ selectedBook, setShowModal, borrowHistory, historyLoa
           )}
 
           <div>
-            <h4 style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: "600",color:"#0f1110ff" }}>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: "600", color: "#0f1110ff" }}>
               Borrow History (Last 10)
             </h4>
-            
+
             {historyLoading ? (
               <div style={{ textAlign: "center", padding: "20px", color: "#6b7280" }}>Loading history...</div>
             ) : borrowHistory.length === 0 ? (
@@ -1188,46 +1083,46 @@ function BookDetailModal({ selectedBook, setShowModal, borrowHistory, historyLoa
                 {borrowHistory.slice(0, 10).map((req) => (
                   <div key={req._id} style={{ padding: "12px", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between" }}>
                     <div>
-                      <p style={{ margin: 0, fontSize: "14px", fontWeight: "500",color:"#0f1110ff" }}>
+                      <p style={{ margin: 0, fontSize: "14px", fontWeight: "500", color: "#0f1110ff" }}>
                         {req.student?.firstName} {req.student?.lastName}
                       </p>
                       <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "#292727ff" }}>
-                        {req.status === "returned" 
-                          ? `Returned: ${new Date(req.returnDate).toLocaleDateString()}`
+                        {req.status === "returned"
+                          ? `Returned: ${req.returnDate ? new Date(req.returnDate).toLocaleDateString() : "N/A"}`
                           : req.status === "approved"
-                          ? `Borrowed: ${new Date(req.borrowDate || req.createdAt).toLocaleDateString()}`
-                          : `Requested: ${new Date(req.createdAt).toLocaleDateString()}`
+                            ? `Borrowed: ${new Date(req.borrowDate || req.createdAt).toLocaleDateString()}`
+                            : `Requested: ${new Date(req.createdAt).toLocaleDateString()}`
                         }
                       </p>
                     </div>
-                   <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                          {req.status === "returned" && req.bookCondition && (
-                            <span style={{
-                              padding: "4px 8px",
-                              borderRadius: "12px",
-                              fontSize: "12px",
-                              fontWeight: "600",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              backgroundColor: req.bookCondition === "good" ? "#d1fae5" : 
-                                              req.bookCondition === "damaged" ? "#fef3c7" : "#fee2e2",
-                              color: req.bookCondition === "good" ? "#065f46" : 
-                                    req.bookCondition === "damaged" ? "#92400e" : "#991b1b"
-                            }}>
-                              {req.bookCondition === "good" && <CheckCircle size={12} />}
-                              {req.bookCondition === "damaged" && <AlertCircleIcon size={12} />}
-                              {req.bookCondition === "lost" && <XCircle size={12} />}
-                              {req.bookCondition.toUpperCase()}
-                            </span>
-                          )}
-                          {req.totalFee > 0 && (
-                            <span style={{ fontSize: "13px", fontWeight: "700", color: "#ef4444" }}>
-                              ₱{req.totalFee}
-                            </span>
-                          )}
-                          {req.isLate && <Clock size={14} color="#ef4444" />}
-                        </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      {req.status === "returned" && req.bookCondition && (
+                        <span style={{
+                          padding: "4px 8px",
+                          borderRadius: "12px",
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          backgroundColor: req.bookCondition === "good" ? "#d1fae5" :
+                            req.bookCondition === "damaged" ? "#fef3c7" : "#fee2e2",
+                          color: req.bookCondition === "good" ? "#065f46" :
+                            req.bookCondition === "damaged" ? "#92400e" : "#991b1b"
+                        }}>
+                          {req.bookCondition === "good" && <CheckCircle size={12} />}
+                          {req.bookCondition === "damaged" && <AlertCircle size={12} />}
+                          {req.bookCondition === "lost" && <XCircle size={12} />}
+                          {req.bookCondition.toUpperCase()}
+                        </span>
+                      )}
+                      {req.totalFee > 0 && (
+                        <span style={{ fontSize: "13px", fontWeight: "700", color: "#ef4444" }}>
+                          ₱{req.totalFee}
+                        </span>
+                      )}
+                      {req.isLate && <Clock size={14} color="#ef4444" />}
+                    </div>
                   </div>
                 ))}
               </div>

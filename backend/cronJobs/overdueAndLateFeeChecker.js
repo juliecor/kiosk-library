@@ -3,7 +3,7 @@ import cron from "node-cron";
 import axios from "axios";
 import BorrowedRequest from "../models/borrowedRequest.js";
 
-const SMS_GATEWAY_URL = "http://192.168.1.17:8080/send";
+const SMS_GATEWAY_URL = "http://192.168.1.2:8080/send";
 const DAILY_LATE_FEE = 5;
 
 // 💡 Reusable function to run overdue checks
@@ -23,7 +23,9 @@ export async function checkOverdues() {
     if (!student || !book) continue;
 
     const dueDate = new Date(request.dueDate);
-    const daysLate = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+    
+    // 🔧 FIX: Use Math.ceil for consistency with frontend
+    const daysLate = Math.ceil((today - dueDate) / (1000 * 60 * 60 * 24));
     if (daysLate <= 0) continue;
 
     const newFee = daysLate * DAILY_LATE_FEE;
@@ -37,7 +39,7 @@ export async function checkOverdues() {
         await axios.get(SMS_GATEWAY_URL, {
           params: {
             to: student.contactNumber,
-            message: `BENEDICTO COLLEGE LIBRARY: Hi ${student.firstName}, the book "${book.title}" is overdue by ${daysLate} day(s). Your current late fee is ${newFee}. Please return it soon.`
+            message: `BENEDICTO COLLEGE LIBRARY: Hi ${student.firstName}, the book "${book.title}" is overdue by ${daysLate} day(s). Your current late fee is PHP ${newFee}. Please return it soon.`
           }
         });
         console.log(`📲 SMS sent to ${student.firstName} (${student.contactNumber})`);
@@ -51,7 +53,7 @@ export async function checkOverdues() {
 }
 
 // ⏰ Schedule it daily at 8 AM
-cron.schedule("29 12 * * *", checkOverdues);
+cron.schedule("25 20 * * *", checkOverdues);
 
 // 🚀 Run once immediately for testing
 (async () => {

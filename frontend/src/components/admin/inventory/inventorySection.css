@@ -269,7 +269,7 @@
 .filter-btn {
   padding: 8px 16px;
   border: none;
-  background: #f3f4f6;
+  background: #eef0f3;
   color: #374151;
   border-radius: 6px;
   cursor: pointer;
@@ -279,13 +279,15 @@
 }
 
 .filter-btn.active {
-  color: white;
+  color: rgb(16, 16, 16);
 }
 
 .filter-btn.active.all {
   background: #3b82f6;
 }
-
+.filter-btn.active.damaged {
+  background: #f1822c;
+}
 .filter-btn.active.low-stock {
   background: #f59e0b;
 }

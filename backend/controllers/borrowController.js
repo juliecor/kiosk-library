@@ -2,9 +2,10 @@
 const BorrowedRequest = require("../models/borrowedRequest");
 const Student = require("../models/student");
 const Book = require("../models/book");
+const StockHistory = require("../models/stockHistory");
 const axios = require("axios");
 
-const SMS_GATEWAY_URL = "http://192.168.1.17:8080/send";
+const SMS_GATEWAY_URL = "http://192.168.1.2:8080/send";
 
 // ==========================
 // CREATE BORROW REQUEST
@@ -83,6 +84,7 @@ exports.createBorrowRequest = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
 // ==========================
 // GET ALL REQUESTS
 // ==========================
@@ -206,7 +208,7 @@ exports.denyRequest = async (req, res) => {
 };
 
 // ==========================
-// RETURN BOOK WITH FIXED DAMAGE FEE HANDLING
+// RETURN BOOK WITH STOCK HISTORY LOGGING - FIXED VERSION
 // ==========================
 exports.returnBook = async (req, res) => {
   try {
@@ -286,18 +288,88 @@ exports.returnBook = async (req, res) => {
     await request.save();
     console.log("✅ Request saved successfully");
 
-    // Inventory Logic
+    // ✅ FIXED INVENTORY LOGIC + Stock History
     const bookId = request.book._id;
     const cond = request.bookCondition;
+    const book = await Book.findById(bookId); // Get current book state BEFORE changes
 
     if (cond === "good") {
       console.log("✅ [GOOD] Incrementing availableCopies for book:", bookId);
       await Book.findByIdAndUpdate(bookId, { $inc: { availableCopies: 1 } });
+      
     } else if (cond === "damaged") {
-      console.log("⚠️ [DAMAGED] Book NOT returned to inventory - awaiting admin decision");
+      console.log("⚠️ [DAMAGED] Book exists but not usable - ONLY decrementing availableCopies");
+      
+      // Capture BEFORE state
+      const previousTotal = book.totalCopies;
+      const previousAvailable = book.availableCopies;
+      
+      // ✅ FIXED: Only decrement availableCopies, NOT totalCopies
+      // The book still physically exists, it's just not available for borrowing
+      await Book.findByIdAndUpdate(bookId, { 
+        $inc: { 
+          availableCopies: book.availableCopies > 0 ? -1 : 0
+        } 
+      });
+      
+      // Create stock history entry
+      try {
+        await StockHistory.create({
+          book: bookId,
+          bookTitle: request.book.title,
+          author: request.book.author,
+          action: "remove",
+          quantity: 1,
+          reason: "damaged",
+          notes: damageDescription || "Book returned in damaged condition - removed from circulation",
+          previousAvailable: previousAvailable,
+          previousTotal: previousTotal,
+          newAvailable: Math.max(0, previousAvailable - 1),
+          newTotal: previousTotal, // ✅ Total stays the same
+          admin: req.admin._id,
+          adminName: req.admin.fullName || "Library Admin"
+        });
+        console.log("✅ Stock history created for damaged book");
+      } catch (historyError) {
+        console.error("Failed to create stock history:", historyError);
+      }
+      
     } else if (cond === "lost") {
-      console.log("❌ [LOST] Decrementing totalCopies for book:", bookId);
-      await Book.findByIdAndUpdate(bookId, { $inc: { totalCopies: -1 } });
+      console.log("❌ [LOST] Book is gone - Decrementing BOTH totalCopies and availableCopies");
+      
+      // Capture BEFORE state
+      const previousTotal = book.totalCopies;
+      const previousAvailable = book.availableCopies;
+      
+      // Update book inventory - lost books reduce both counts
+      await Book.findByIdAndUpdate(bookId, { 
+        $inc: { 
+          totalCopies: -1,
+          availableCopies: book.availableCopies > 0 ? -1 : 0
+        } 
+      });
+      
+      // Create stock history entry
+      try {
+        await StockHistory.create({
+          book: bookId,
+          bookTitle: request.book.title,
+          author: request.book.author,
+          action: "remove",
+          quantity: 1,
+          reason: "lost",
+          notes: "Book reported as lost by student - permanently removed from inventory",
+          previousAvailable: previousAvailable,
+          previousTotal: previousTotal,
+          newAvailable: Math.max(0, previousAvailable - 1),
+          newTotal: previousTotal - 1,
+          admin: req.admin._id,
+          adminName: req.admin.fullName || "Library Admin"
+        });
+        console.log("✅ Stock history created for lost book");
+      } catch (historyError) {
+        console.error("Failed to create stock history:", historyError);
+      }
     }
 
     // SMS Notification
@@ -357,8 +429,8 @@ exports.returnBook = async (req, res) => {
           cond === "good"
             ? "availableCopies +1 (returned to circulation)"
             : cond === "damaged"
-            ? "no change (awaiting admin decision via adjustStock)"
-            : "totalCopies -1 (permanently lost)"
+            ? "availableCopies -1 (removed from circulation, book still exists)" // ✅ Updated message
+            : "totalCopies -1, availableCopies -1 (permanently lost)"
       },
       fees: {
         lateFee: request.lateFee,
@@ -371,7 +443,6 @@ exports.returnBook = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
-
 // ==========================
 // PAY FEE
 // ==========================
