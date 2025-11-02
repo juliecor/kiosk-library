@@ -5,8 +5,187 @@ const Book = require("../models/book");
 const StockHistory = require("../models/stockHistory");
 const axios = require("axios");
 
-const SMS_GATEWAY_URL = "http://192.168.1.2:8080/send";
+const SMS_GATEWAY_URL = process.env.SMS_GATEWAY_URL || "http://192.168.1.2:8080/send";
 
+// ==========================
+// TEMPORARY OTP STORAGE (Consider Redis for production)
+// ==========================
+const otpStore = new Map();
+const otpRequestCount = new Map();
+
+// Cleanup expired OTPs every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of otpStore.entries()) {
+    if (now > value.expiresAt) {
+      otpStore.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+
+// Cleanup old request counts every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamps] of otpRequestCount.entries()) {
+    const recent = timestamps.filter(time => now - time < 15 * 60 * 1000);
+    if (recent.length === 0) {
+      otpRequestCount.delete(key);
+    } else {
+      otpRequestCount.set(key, recent);
+    }
+  }
+}, 30 * 60 * 1000);
+
+// ==========================
+// SEND OTP TO STUDENT
+// ==========================
+exports.sendOTP = async (req, res) => {
+  try {
+    const { studentId } = req.body;
+
+    if (!studentId)
+      return res.status(400).json({ success: false, message: "Student ID is required" });
+
+    // ✅ Rate Limiting: Max 3 OTPs per 15 minutes
+    const now = Date.now();
+    const requests = otpRequestCount.get(studentId) || [];
+    const recentRequests = requests.filter(time => now - time < 15 * 60 * 1000);
+    
+    if (recentRequests.length >= 10) {
+      return res.status(429).json({ 
+        success: false, 
+        message: "Too many OTP requests. Please wait 15 minutes before trying again." 
+      });
+    }
+
+    const student = await Student.findOne({ studentId });
+    if (!student)
+      return res.status(404).json({ success: false, message: "Student not found" });
+
+    if (!student.contactNumber)
+      return res.status(400).json({ 
+        success: false, 
+        message: "No contact number registered. Please contact the library to update your information." 
+      });
+
+    // ✅ Validate phone number format (basic check)
+    const phoneRegex = /^(09|\+639)\d{9}$/;
+    if (!phoneRegex.test(student.contactNumber)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid phone number format in your profile. Please contact the library." 
+      });
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Save OTP temporarily (3 minutes)
+    otpStore.set(studentId, { 
+      otp, 
+      expiresAt: Date.now() + 3 * 60 * 1000,
+      attempts: 0 // Track verification attempts
+    });
+
+    // Update request count
+    recentRequests.push(now);
+    otpRequestCount.set(studentId, recentRequests);
+
+    // ✅ Send via SMS with error handling
+    try {
+      await axios.get(SMS_GATEWAY_URL, {
+        params: {
+          to: student.contactNumber,
+          message: `BENEDICTO COLLEGE LIBRARY: Your OTP code is ${otp}. It will expire in 3 minutes. Do not share this code.`
+        },
+        timeout: 10000 // 10 second timeout
+      });
+    } catch (smsError) {
+      console.error("SMS Gateway Error:", smsError.message);
+      otpStore.delete(studentId); // Remove OTP if SMS failed
+      return res.status(503).json({ 
+        success: false, 
+        message: "Failed to send OTP. SMS service temporarily unavailable. Please try again." 
+      });
+    }
+
+    // ✅ Log OTP activity for security audit
+    console.log(`[OTP] Sent to student ${studentId} at ${new Date().toISOString()}`);
+
+    res.json({ 
+      success: true, 
+      message: "OTP sent successfully to your registered mobile number",
+      expiresIn: "3 minutes"
+    });
+  } catch (error) {
+    console.error("sendOTP error:", error);
+    res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
+  }
+};
+
+// ==========================
+// VERIFY OTP
+// ==========================
+exports.verifyOTP = async (req, res) => {
+  try {
+    const { studentId, otp } = req.body;
+
+    if (!studentId || !otp)
+      return res.status(400).json({ success: false, message: "Missing studentId or OTP" });
+
+    // ✅ Sanitize OTP input
+    const sanitizedOTP = otp.trim();
+    if (!/^\d{6}$/.test(sanitizedOTP)) {
+      return res.status(400).json({ success: false, message: "Invalid OTP format. Must be 6 digits." });
+    }
+
+    const record = otpStore.get(studentId);
+
+    if (!record)
+      return res.status(400).json({ success: false, message: "No OTP found or expired. Please request a new one." });
+
+    // ✅ Check expiration
+    if (Date.now() > record.expiresAt) {
+      otpStore.delete(studentId);
+      return res.status(400).json({ success: false, message: "OTP expired. Please request a new one." });
+    }
+
+    // ✅ Limit verification attempts (max 3)
+    record.attempts = (record.attempts || 0) + 1;
+    
+    if (record.attempts > 3) {
+      otpStore.delete(studentId);
+      console.log(`[OTP] Too many failed attempts for student ${studentId}`);
+      return res.status(400).json({ 
+        success: false, 
+        message: "Too many failed attempts. Please request a new OTP." 
+      });
+    }
+
+    // ✅ Verify OTP
+    if (record.otp !== sanitizedOTP) {
+      otpStore.set(studentId, record); // Save updated attempt count
+      const remainingAttempts = 3 - record.attempts;
+      console.log(`[OTP] Invalid attempt for student ${studentId}. Remaining: ${remainingAttempts}`);
+      return res.status(400).json({ 
+        success: false, 
+        message: `Invalid OTP. ${remainingAttempts} attempt(s) remaining.` 
+      });
+    }
+
+    // ✅ SUCCESS - Remove OTP after successful verification
+    otpStore.delete(studentId);
+    console.log(`[OTP] Successfully verified for student ${studentId}`);
+    
+    res.json({ 
+      success: true, 
+      message: "OTP verified successfully" 
+    });
+  } catch (error) {
+    console.error("verifyOTP error:", error);
+    res.status(500).json({ success: false, message: "Server error during OTP verification" });
+  }
+};
 // ==========================
 // CREATE BORROW REQUEST
 // ==========================

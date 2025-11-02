@@ -58,6 +58,16 @@ function InventorySection() {
     recentLostCount: 0,
     recentRepairs: 0,
   });
+  const [dateRange, setDateRange] = useState({
+    startDate: "",
+    endDate: ""
+  });
+  const [showDateRangeModal, setShowDateRangeModal] = useState(false);
+  const [inventoryDateRange, setInventoryDateRange] = useState({
+    startDate: "",
+    endDate: ""
+  });
+  const [showInventoryDateModal, setShowInventoryDateModal] = useState(false);
 
   // fetch books and combined history when pagination/filter/search changes
   useEffect(() => {
@@ -328,7 +338,7 @@ function InventorySection() {
       } else {
         if (adjustmentForm.reason === "damaged" || adjustmentForm.reason === "lost") {
           newTotal -= adjustment;
-          totalCopies = Math.max(0, totalCopies - adjustment);
+          newTotal = Math.max(0, newTotal);
         } else {
           newAvailable -= adjustment;
         }
@@ -457,10 +467,25 @@ function InventorySection() {
 
   const getFilteredHistory = () => {
     let filtered = [...stockHistory];
+    
+    // Filter by type
     if (historyFilter === "repairs") filtered = filtered.filter(h => h.reason === "repair");
     else if (historyFilter === "lost") filtered = filtered.filter(h => h.reason === "lost");
     else if (historyFilter === "damaged") filtered = filtered.filter(h => h.reason === "damaged");
     else if (historyFilter === "additions") filtered = filtered.filter(h => h.action === "add");
+    
+    // Filter by date range
+    if (dateRange.startDate && dateRange.endDate) {
+      const start = new Date(dateRange.startDate);
+      const end = new Date(dateRange.endDate);
+      end.setHours(23, 59, 59, 999); // Include entire end date
+      
+      filtered = filtered.filter(h => {
+        const itemDate = new Date(h.date);
+        return itemDate >= start && itemDate <= end;
+      });
+    }
+    
     return filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
   };
 
@@ -473,7 +498,12 @@ function InventorySection() {
     });
 
     let csvContent = "BENEDICTO COLLEGE LIBRARY - INVENTORY REPORT\n";
-    csvContent += `Generated: ${new Date().toLocaleString()}\n\n`;
+    csvContent += `Generated: ${new Date().toLocaleString()}\n`;
+    
+    if (inventoryDateRange.startDate && inventoryDateRange.endDate) {
+      csvContent += `Period: ${new Date(inventoryDateRange.startDate).toLocaleDateString()} to ${new Date(inventoryDateRange.endDate).toLocaleDateString()}\n`;
+    }
+    csvContent += "\n";
 
     Object.keys(booksByCategory).sort().forEach((category) => {
       csvContent += `\nCATEGORY: ${category}\n`;
@@ -487,10 +517,11 @@ function InventorySection() {
 
       const categoryTotal = booksByCategory[category].reduce((sum, b) => sum + (b.totalCopies || 0), 0);
       const categoryAvailable = booksByCategory[category].reduce((sum, b) => sum + (b.availableCopies || 0), 0);
-      csvContent += `SUBTOTAL,${booksByCategory[category].length} books,,,${categoryTotal},${categoryAvailable},${categoryTotal - categoryAvailable},\n`;
+      const categoryBorrowed = categoryTotal - categoryAvailable;
+      csvContent += `SUBTOTAL,"${booksByCategory[category].length} books",,${categoryTotal},${categoryAvailable},${categoryBorrowed},\n`;
     });
 
-    csvContent += `\nGRAND TOTAL,${filteredAndSearchedBooks.length} books,,,${stats.totalCopies},${stats.availableCopies},${stats.borrowedCopies},\n`;
+    csvContent += `\nGRAND TOTAL,"${filteredAndSearchedBooks.length} books",,${stats.totalCopies},${stats.availableCopies},${stats.borrowedCopies},\n`;
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
@@ -500,23 +531,42 @@ function InventorySection() {
   };
 
   const exportHistoryToCSV = () => {
-    const headers = ["Date", "Book Title", "Action", "Quantity", "Reason", "Notes", "Admin"];
-    const rows = getFilteredHistory().map((h) => [
-      new Date(h.date).toLocaleString(),
-      `"${h.bookTitle}"`,
-      h.action,
-      h.quantity,
-      h.reason,
-      `"${h.notes || ""}"`,
-      h.adminName || "Library Admin"
-    ]);
+    try {
+      let csvContent = "BENEDICTO COLLEGE LIBRARY - STOCK HISTORY REPORT\n";
+      csvContent += `Generated: ${new Date().toLocaleString()}\n`;
+      
+      if (dateRange.startDate && dateRange.endDate) {
+        csvContent += `Period: ${new Date(dateRange.startDate).toLocaleDateString()} to ${new Date(dateRange.endDate).toLocaleDateString()}\n`;
+      }
+      csvContent += "\n";
+      
+      csvContent += "Date,Book Title,Action,Quantity,Reason,Notes,Admin\n";
+      
+      const filteredHistory = getFilteredHistory();
+      
+      filteredHistory.forEach((h) => {
+        const date = h.date ? new Date(h.date).toLocaleDateString() : "-";
+        const bookTitle = (h.bookTitle || "").replace(/"/g, '""');
+        const action = h.action || "-";
+        const quantity = h.quantity || 0;
+        const reason = h.reason || "-";
+        const notes = (h.notes || "").replace(/"/g, '""');
+        const admin = h.fullName || h.adminName || "Library Admin";
+        
+        csvContent += `${date},"${bookTitle}",${action},${quantity},${reason},"${notes}","${admin}"\n`;
+      });
 
-    const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `stock_history_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `stock_history_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      
+      showNotification("Stock history exported successfully", "success");
+    } catch (error) {
+      console.error("Export error:", error);
+      showNotification("Failed to export stock history", "error");
+    }
   };
 
   const handleSort = (field) => {
@@ -626,6 +676,9 @@ function InventorySection() {
           exportToCSV={exportToCSV}
           currentPage={currentPage}
           totalPages={totalPages}
+          inventoryDateRange={inventoryDateRange}
+          setInventoryDateRange={setInventoryDateRange}
+          setShowInventoryDateModal={setShowInventoryDateModal}
         />
       )}
 
@@ -635,6 +688,9 @@ function InventorySection() {
           historyFilter={historyFilter}
           setHistoryFilter={setHistoryFilter}
           exportHistoryToCSV={exportHistoryToCSV}
+          dateRange={dateRange}
+          setDateRange={setDateRange}
+          setShowDateRangeModal={setShowDateRangeModal}
         />
       )}
 
@@ -656,6 +712,24 @@ function InventorySection() {
           adjustmentForm={adjustmentForm}
           setAdjustmentForm={setAdjustmentForm}
           handleAdjustStock={handleAdjustStock}
+        />
+      )}
+
+      {showDateRangeModal && (
+        <DateRangeModal
+          setShowDateRangeModal={setShowDateRangeModal}
+          dateRange={dateRange}
+          setDateRange={setDateRange}
+          title="Filter Stock History by Date"
+        />
+      )}
+
+      {showInventoryDateModal && (
+        <DateRangeModal
+          setShowDateRangeModal={setShowInventoryDateModal}
+          dateRange={inventoryDateRange}
+          setDateRange={setInventoryDateRange}
+          title="Select Report Period"
         />
       )}
     </div>
@@ -685,17 +759,63 @@ function InventoryTab({
   loading, filteredAndSearchedBooks, filter, setFilter, setCurrentPage, stats,
   searchQuery, handleSearch, sortBy, handleSort, sortOrder, getStockStatus,
   handleBookClick, setSelectedBook, setShowAdjustModal, exportToCSV,
-  currentPage, totalPages
+  currentPage, totalPages, inventoryDateRange, setInventoryDateRange, setShowInventoryDateModal
 }) {
+  const clearInventoryDateRange = () => {
+    setInventoryDateRange({ startDate: "", endDate: "" });
+  };
+
   return (
     <div className="inventory-content">
       <div className="inventory-header">
         <h2>Books Inventory</h2>
-        <button className="export-button" onClick={exportToCSV}>
-          <Download size={18} />
-          Export by Category
-        </button>
+        <div style={{ display: "flex", gap: "12px" }}>
+          <button className="export-button" onClick={() => setShowInventoryDateModal(true)}>
+            <Clock size={18} />
+            Report Period
+          </button>
+          <button className="export-button" onClick={exportToCSV}>
+            <Download size={18} />
+            Export by Category
+          </button>
+        </div>
       </div>
+
+      {(inventoryDateRange.startDate && inventoryDateRange.endDate) && (
+        <div style={{ 
+          padding: "12px 16px", 
+          backgroundColor: "#eff6ff", 
+          borderRadius: "8px", 
+          marginBottom: "16px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          border: "1px solid #3b82f6"
+        }}>
+          <span style={{ fontSize: "14px", color: "#1e40af", fontWeight: "500" }}>
+            Report Period: {new Date(inventoryDateRange.startDate).toLocaleDateString()} to {new Date(inventoryDateRange.endDate).toLocaleDateString()}
+          </span>
+          <button
+            onClick={clearInventoryDateRange}
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#3b82f6",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "13px",
+              fontWeight: "500",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }}
+          >
+            <X size={14} />
+            Clear Period
+          </button>
+        </div>
+      )}
 
       <div className="search-container">
         <Search size={20} className="search-icon" />
@@ -857,7 +977,7 @@ function InventoryTab({
 }
 
 // Stock History Tab Component
-function StockHistoryTab({ stockHistory, historyFilter, setHistoryFilter, exportHistoryToCSV }) {
+function StockHistoryTab({ stockHistory, historyFilter, setHistoryFilter, exportHistoryToCSV, dateRange, setDateRange, setShowDateRangeModal }) {
   const getActionIcon = (action, reason) => {
     if (reason === "repair") return <Wrench size={12} />;
     if (reason === "lost") return <XCircle size={12} />;
@@ -883,15 +1003,61 @@ function StockHistoryTab({ stockHistory, historyFilter, setHistoryFilter, export
     }
   };
 
+  const clearDateRange = () => {
+    setDateRange({ startDate: "", endDate: "" });
+  };
+
   return (
     <div className="inventory-content">
       <div className="inventory-header">
         <h2>Stock Movement History</h2>
-        <button className="export-button" onClick={exportHistoryToCSV}>
-          <Download size={18} />
-          Export History
-        </button>
+        <div style={{ display: "flex", gap: "12px" }}>
+          <button className="export-button" onClick={() => setShowDateRangeModal(true)}>
+            <Clock size={18} />
+            Filter by Date
+          </button>
+          <button className="export-button" onClick={exportHistoryToCSV}>
+            <Download size={18} />
+            Export History
+          </button>
+        </div>
       </div>
+
+      {(dateRange.startDate && dateRange.endDate) && (
+        <div style={{ 
+          padding: "12px 16px", 
+          backgroundColor: "#eff6ff", 
+          borderRadius: "8px", 
+          marginBottom: "16px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          border: "1px solid #3b82f6"
+        }}>
+          <span style={{ fontSize: "14px", color: "#1e40af", fontWeight: "500" }}>
+            Showing records from {new Date(dateRange.startDate).toLocaleDateString()} to {new Date(dateRange.endDate).toLocaleDateString()}
+          </span>
+          <button
+            onClick={clearDateRange}
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#3b82f6",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "13px",
+              fontWeight: "500",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }}
+          >
+            <X size={14} />
+            Clear Filter
+          </button>
+        </div>
+      )}
 
       <div className="filter-buttons">
         {["all", "repairs", "lost", "damaged", "additions"].map((f) => (
@@ -911,7 +1077,7 @@ function StockHistoryTab({ stockHistory, historyFilter, setHistoryFilter, export
 
       {stockHistory.length === 0 ? (
         <div className="empty-container">
-          <p>No stock history available</p>
+          <p>No stock history available for selected filters</p>
         </div>
       ) : (
         <div style={{ overflowX: "auto" }}>
@@ -960,7 +1126,9 @@ function StockHistoryTab({ stockHistory, historyFilter, setHistoryFilter, export
                       <span style={{ fontSize: "12px", color: "#6b7280" }}>{history.notes || "-"}</span>
                     </td>
                     <td>
-                      <span style={{ fontSize: "12px", color: "#6b7280" }}>{history.fullName || "Library Admin"}</span>
+                      <span style={{ fontSize: "12px", color: "#6b7280" }}>
+                        {history.fullName || history.adminName || "Library Admin"}
+                      </span>
                     </td>
                   </tr>
                 );
@@ -1258,6 +1426,141 @@ function InfoItem({ label, value }) {
       <p style={{ margin: "4px 0 0 0", fontSize: "14px", color: "#1f2937", fontWeight: "500" }}>
         {value}
       </p>
+    </div>
+  );
+}
+
+// Date Range Modal Component
+function DateRangeModal({ setShowDateRangeModal, dateRange, setDateRange, title }) {
+  const [localDateRange, setLocalDateRange] = useState({
+    startDate: dateRange.startDate || "",
+    endDate: dateRange.endDate || ""
+  });
+
+  const handleApply = () => {
+    if (localDateRange.startDate && localDateRange.endDate) {
+      if (new Date(localDateRange.startDate) > new Date(localDateRange.endDate)) {
+        alert("Start date cannot be after end date");
+        return;
+      }
+      setDateRange(localDateRange);
+      setShowDateRangeModal(false);
+    } else {
+      alert("Please select both start and end dates");
+    }
+  };
+
+  const handleQuickSelect = (days) => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - days);
+    
+    setLocalDateRange({
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0]
+    });
+  };
+
+  return (
+    <div className="modal-overlay" onClick={() => setShowDateRangeModal(false)}>
+      <div className="modal-content" style={{ maxWidth: "500px" }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>{title || "Filter by Date Range"}</h2>
+          <button className="modal-close" onClick={() => setShowDateRangeModal(false)}>
+            <X size={20} color="#6b7280" />
+          </button>
+        </div>
+
+        <div className="modal-body">
+          <div style={{ marginBottom: "20px" }}>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: "600", color: "#374151" }}>
+              Quick Select
+            </h4>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => handleQuickSelect(7)}
+                style={{
+                  padding: "8px 12px",
+                  backgroundColor: "#f3f4f6",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  color: "#374151"
+                }}
+              >
+                Last 7 Days
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickSelect(30)}
+                style={{
+                  padding: "8px 12px",
+                  backgroundColor: "#f3f4f6",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  color: "#374151"
+                }}
+              >
+                Last 30 Days
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickSelect(90)}
+                style={{
+                  padding: "8px 12px",
+                  backgroundColor: "#f3f4f6",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  color: "#374151"
+                }}
+              >
+                Last 90 Days
+              </button>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Start Date</label>
+            <input
+              type="date"
+              className="form-input"
+              value={localDateRange.startDate}
+              onChange={(e) => setLocalDateRange({ ...localDateRange, startDate: e.target.value })}
+              max={new Date().toISOString().split('T')[0]}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">End Date</label>
+            <input
+              type="date"
+              className="form-input"
+              value={localDateRange.endDate}
+              onChange={(e) => setLocalDateRange({ ...localDateRange, endDate: e.target.value })}
+              max={new Date().toISOString().split('T')[0]}
+              min={localDateRange.startDate}
+            />
+          </div>
+
+          <div className="form-buttons">
+            <button type="button" className="form-btn cancel" onClick={() => setShowDateRangeModal(false)}>
+              Cancel
+            </button>
+            <button type="button" className="form-btn submit" onClick={handleApply}>
+              Apply Filter
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

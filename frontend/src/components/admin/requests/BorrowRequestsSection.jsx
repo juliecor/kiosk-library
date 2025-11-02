@@ -763,6 +763,7 @@ function BorrowRequestsSection() {
                   placeholder="Describe the damage (e.g., torn pages 15-20, water stains on cover)"
                   style={{
                     width: "100%",
+                    backgroundColor:" #ffffffff",
                     minHeight: "80px",
                     padding: "10px",
                     color:"#232324ff",

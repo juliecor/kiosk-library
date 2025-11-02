@@ -61,7 +61,7 @@ function DashboardOverview({ statsCards, recentActivity, setActiveSection }) {
         <div className="admin-recent-activity-section">
           <div className="admin-activity-header">
             <h3 className="admin-section-title">Recent Activity</h3>
-            <button className="admin-view-all-btn">View All</button>
+           
           </div>
           <div className="admin-activity-list">
             {recentActivity.map((activity, index) => (

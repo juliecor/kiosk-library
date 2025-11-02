@@ -5,7 +5,7 @@ function Sidebar({ activeSection, setActiveSection, navItems }) {
     <aside className="admin-sidebar-container">
       <div className="admin-sidebar-header">
         <div className="admin-sidebar-logo">
-          <div className="admin-logo-icon">📚</div>
+          
           <div className="admin-logo-text">
             <h2 className="admin-logo-title">BENEDICTO COLLEGE</h2>
             <p className="admin-logo-subtitle">Admin Panel</p>

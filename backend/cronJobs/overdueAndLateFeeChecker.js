@@ -53,7 +53,7 @@ export async function checkOverdues() {
 }
 
 // ⏰ Schedule it daily at 8 AM
-cron.schedule("25 20 * * *", checkOverdues);
+cron.schedule("40 8 * * *", checkOverdues);
 
 // 🚀 Run once immediately for testing
 (async () => {

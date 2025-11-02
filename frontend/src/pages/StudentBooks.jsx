@@ -1,3 +1,4 @@
+// StudentBooks.jsx - Updated with Popup Modal for Borrowed Books
 import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import toast, { Toaster } from 'react-hot-toast';
@@ -5,6 +6,8 @@ import { useNavigate } from "react-router-dom";
 import "./StudentBooks.css";
 import bclogo from "../assets/bclogo.jpg";
 import BookDetailsModal from "../components/admin/students/BookDetailsModal";
+import OTPModal from "./OTPModal";
+import StudentBorrowedBooksModal from "./StudentBorrowedBooksModal";
 
 export default function StudentBooks() {
   const navigate = useNavigate();
@@ -17,35 +20,38 @@ export default function StudentBooks() {
   const [viewingBook, setViewingBook] = useState(null);
   const [failedAttempts, setFailedAttempts] = useState(0);
 
-  // NEW STATES for two-step modal
-  const [showTerms, setShowTerms] = useState(false);
+  // 🆕 States for borrowed books modal
+  const [showBorrowedBooksModal, setShowBorrowedBooksModal] = useState(false);
+  const [showBorrowedBooksIdModal, setShowBorrowedBooksIdModal] = useState(false);
+  const [borrowedBooksStudentId, setBorrowedBooksStudentId] = useState("");
+
+  // States for multi-step modal flow
+  const [currentStep, setCurrentStep] = useState(1);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  // NEW STATES for filters/sorting
+  // States for filters/sorting
   const [filterShelf, setFilterShelf] = useState("");
   const [filterYear, setFilterYear] = useState("");
   const [sortBy, setSortBy] = useState("");
 
-  // 🆕 NEW STATE for student info and status
+  // Student info and status
   const [studentInfo, setStudentInfo] = useState(null);
   const [checkingStudent, setCheckingStudent] = useState(false);
 
   // Inactivity timer
   const inactivityTimerRef = useRef(null);
-  const INACTIVITY_TIMEOUT = 120000; // 2 minutes in milliseconds
+  const INACTIVITY_TIMEOUT = 120000;
 
   useEffect(() => {
     fetchBooks();
     startInactivityTimer();
 
-    // Add event listeners for activity
     const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'mousemove'];
     events.forEach(event => {
       window.addEventListener(event, resetInactivityTimer);
     });
 
     return () => {
-      // Cleanup
       clearTimeout(inactivityTimerRef.current);
       events.forEach(event => {
         window.removeEventListener(event, resetInactivityTimer);
@@ -91,6 +97,66 @@ export default function StudentBooks() {
     }
   };
 
+  // 🆕 Open borrowed books ID modal
+  const handleOpenBorrowedBooksModal = () => {
+    setShowBorrowedBooksIdModal(true);
+    setBorrowedBooksStudentId("");
+  };
+
+  // 🆕 Handle View Borrowed Books from modal
+  const handleViewBorrowedBooks = () => {
+    if (!borrowedBooksStudentId.trim()) {
+      toast.error("Please enter your Student ID", {
+        duration: 3000,
+        position: 'top-center',
+        icon: '⚠️',
+      });
+      return;
+    }
+
+    setCheckingStudent(true);
+    axios.get(`http://localhost:5000/api/students/${borrowedBooksStudentId}`)
+      .then(response => {
+        if (response.data.success) {
+          setShowBorrowedBooksIdModal(false);
+          setShowBorrowedBooksModal(true);
+        }
+      })
+      .catch(error => {
+        console.error("Error verifying student:", error);
+        toast.error(
+          `❌ Student not found\n\nPlease check your Student ID and try again.`,
+          {
+            duration: 4000,
+            position: 'top-center',
+            style: {
+              borderRadius: '12px',
+              background: '#ef4444',
+              color: '#fff',
+              fontSize: '16px',
+              fontWeight: '600',
+              padding: '20px 28px',
+            },
+          }
+        );
+      })
+      .finally(() => {
+        setCheckingStudent(false);
+      });
+  };
+
+  // 🆕 Close borrowed books ID modal
+  const handleCloseBorrowedBooksIdModal = () => {
+    setShowBorrowedBooksIdModal(false);
+    setBorrowedBooksStudentId("");
+  };
+
+  // 🆕 Close borrowed books modal
+  const handleCloseBorrowedBooksModal = () => {
+    setShowBorrowedBooksModal(false);
+    setBorrowedBooksStudentId("");
+  };
+
   // Apply filters, search, and sorting
   const filteredBooks = books
     .filter((book) => {
@@ -115,10 +181,11 @@ export default function StudentBooks() {
   const handleBorrowClick = (book) => {
     setSelectedBook(book);
     setShowPopup(true);
-    setShowTerms(false);
+    setCurrentStep(1);
     setAgreedToTerms(false);
     setFailedAttempts(0);
-    setStudentInfo(null); // 🆕 Reset student info
+    setStudentInfo(null);
+    setStudentId("");
   };
 
   const handlePreviewClick = (book) => {
@@ -129,17 +196,24 @@ export default function StudentBooks() {
     setViewingBook(null);
   };
 
-  // 🆕 NEW FUNCTION: Check student status
-  const checkStudentStatus = async (id) => {
+  const checkStudentStatus = async () => {
+    if (!studentId.trim()) {
+      toast.error("Please enter your Student ID", {
+        duration: 3000,
+        position: 'top-center',
+        icon: '⚠️',
+      });
+      return;
+    }
+
     setCheckingStudent(true);
     try {
-      const response = await axios.get(`http://localhost:5000/api/students/${id}`);
+      const response = await axios.get(`http://localhost:5000/api/students/${studentId}`);
       
       if (response.data.success) {
         const student = response.data.student;
         setStudentInfo(student);
         
-        // Check if student is inactive
         if (student.status === 'inactive') {
           toast.error(
             `🚫 Account Inactive\n\nYour library account is currently inactive.\nPlease contact the library to activate your account.`,
@@ -157,10 +231,32 @@ export default function StudentBooks() {
               },
             }
           );
-          return false; // Cannot proceed
+          return;
         }
         
-        return true; // Can proceed
+        const eligibilityCheck = await axios.get(`http://localhost:5000/api/borrow/check-eligibility/${studentId}`);
+        
+        if (!eligibilityCheck.data.canBorrow) {
+          toast.error(
+            `🚫 Cannot Borrow\n\n${eligibilityCheck.data.message}`,
+            {
+              duration: 5000,
+              position: 'top-center',
+              style: {
+                borderRadius: '12px',
+                background: '#ef4444',
+                color: '#fff',
+                fontSize: '16px',
+                fontWeight: '600',
+                padding: '20px 28px',
+                maxWidth: '500px',
+              },
+            }
+          );
+          return;
+        }
+        
+        setCurrentStep(2);
       }
     } catch (error) {
       console.error("Error checking student:", error);
@@ -179,37 +275,21 @@ export default function StudentBooks() {
           },
         }
       );
-      return false;
     } finally {
       setCheckingStudent(false);
     }
   };
 
-  // UPDATED: Handle moving from step 1 to step 2 with status check
-  const handleNextToTerms = async () => {
-    if (!studentId.trim()) {
-      toast.error("Please enter your Student ID", {
-        duration: 3000,
-        position: 'top-center',
-        icon: '⚠️',
-      });
-      return;
-    }
-
-    // 🆕 Check student status before proceeding
-    const canProceed = await checkStudentStatus(studentId);
-    
-    if (canProceed) {
-      setShowTerms(true); // Move to step 2
-    } else {
-      // Don't proceed - student is inactive or not found
-      // Error message already shown by checkStudentStatus
-    }
+  const handleOTPVerified = () => {
+    setCurrentStep(3);
   };
 
-  const handleBackToId = () => {
-    setShowTerms(false);
-    setAgreedToTerms(false);
+  const handleBackFromOTP = () => {
+    setCurrentStep(1);
+  };
+
+  const handleBackFromTerms = () => {
+    setCurrentStep(2);
   };
 
   const handleBorrowConfirm = async () => {
@@ -237,7 +317,7 @@ export default function StudentBooks() {
       setShowPopup(false);
       setStudentId("");
       setSelectedBook(null);
-      setShowTerms(false);
+      setCurrentStep(1);
       setAgreedToTerms(false);
       setStudentInfo(null);
 
@@ -269,82 +349,22 @@ export default function StudentBooks() {
       console.error("Error submitting borrow request:", error);
       
       const errorMessage = error.response?.data?.message || "Failed to submit borrow request";
-      const currentBook = error.response?.data?.currentBook;
 
-      const newAttempts = failedAttempts + 1;
-      setFailedAttempts(newAttempts);
-
-      if (newAttempts >= 3) {
-        toast.error(
-          `😟 Too many failed attempts!\n\nPlease ask a librarian for help.\nReturning to home page...`,
-          {
-            duration: 3000,
-            position: 'top-center',
-            style: {
-              borderRadius: '16px',
-              background: '#ef4444',
-              color: '#fff',
-              fontSize: '18px',
-              fontWeight: 'bold',
-              padding: '24px 32px',
-              textAlign: 'center',
-            },
-          }
-        );
-
-        setShowPopup(false);
-        setStudentId("");
-        setSelectedBook(null);
-        setShowTerms(false);
-        setAgreedToTerms(false);
-        setStudentInfo(null);
-
-        setTimeout(() => {
-          navigate('/');
-        }, 3000);
-        
-        return;
-      }
-
-      if (currentBook) {
-        toast.error(
-          `🚫 Cannot borrow!\n\nYou must return "${currentBook}" first.\n\nAttempts left: ${3 - newAttempts}`,
-          {
-            duration: 5000,
-            position: 'top-center',
-            style: {
-              borderRadius: '12px',
-              background: '#ef4444',
-              color: '#fff',
-              fontSize: '16px',
-              fontWeight: '600',
-              padding: '20px 28px',
-              maxWidth: '500px',
-            },
-          }
-        );
-      } else {
-        toast.error(
-          `❌ ${errorMessage}\n\nAttempts left: ${3 - newAttempts}\nPlease try again.`,
-          {
-            duration: 5000,
-            position: 'top-center',
-            style: {
-              borderRadius: '12px',
-              background: '#ef4444',
-              color: '#fff',
-              fontSize: '16px',
-              fontWeight: '600',
-              padding: '20px 28px',
-            },
-          }
-        );
-      }
-
-      setShowTerms(false);
-      setAgreedToTerms(false);
-      setStudentId("");
-      setStudentInfo(null);
+      toast.error(
+        `❌ ${errorMessage}\n\nPlease try again.`,
+        {
+          duration: 5000,
+          position: 'top-center',
+          style: {
+            borderRadius: '12px',
+            background: '#ef4444',
+            color: '#fff',
+            fontSize: '16px',
+            fontWeight: '600',
+            padding: '20px 28px',
+          },
+        }
+      );
     }
   };
 
@@ -353,7 +373,7 @@ export default function StudentBooks() {
     setStudentId("");
     setSelectedBook(null);
     setFailedAttempts(0);
-    setShowTerms(false);
+    setCurrentStep(1);
     setAgreedToTerms(false);
     setStudentInfo(null);
   };
@@ -402,8 +422,16 @@ export default function StudentBooks() {
         }}
       />
 
+      {/* 🆕 Header with Borrowed Books Button on Right */}
       <div className="student-books-header">
         <h1 className="student-books-title">BENEDICTO COLLEGE LIBRARY BOOKS</h1>
+        <button 
+          className="view-borrowed-books-btn"
+          onClick={handleOpenBorrowedBooksModal}
+        >
+          <span className="btn-icon">📚</span>
+          View My Borrowed Books
+        </button>
       </div>
 
       <div className="search-container">
@@ -510,8 +538,8 @@ export default function StudentBooks() {
         </div>
       )}
 
-      {/* STEP 1: Enter Student ID */}
-      {showPopup && selectedBook && !showTerms && (
+      {/* Existing Borrow Popup Flow */}
+      {showPopup && selectedBook && currentStep === 1 && (
         <div className="student-popup" onClick={handleClosePopup}>
           <div className="student-popup-content" onClick={(e) => e.stopPropagation()}>
             <button className="close-btn" onClick={handleClosePopup}>×</button>
@@ -528,14 +556,7 @@ export default function StudentBooks() {
             </div>
 
             <div className="input-group">
-              <label htmlFor="studentId">
-                ENTER STUDENT ID
-                {failedAttempts > 0 && (
-                  <span style={{ color: '#ef4444', fontSize: '12px', marginLeft: '8px' }}>
-                    (Attempts left: {3 - failedAttempts})
-                  </span>
-                )}
-              </label>
+              <label htmlFor="studentId">ENTER STUDENT ID</label>
               <input
                 id="studentId"
                 type="text"
@@ -546,7 +567,7 @@ export default function StudentBooks() {
                 disabled={checkingStudent}
                 onKeyPress={(e) => {
                   if (e.key === 'Enter' && !checkingStudent) {
-                    handleNextToTerms();
+                    checkStudentStatus();
                   }
                 }}
               />
@@ -554,7 +575,7 @@ export default function StudentBooks() {
 
             <div className="popup-buttons">
               <button 
-                onClick={handleNextToTerms} 
+                onClick={checkStudentStatus} 
                 className="confirm-btn"
                 disabled={checkingStudent}
               >
@@ -566,8 +587,18 @@ export default function StudentBooks() {
         </div>
       )}
 
-      {/* STEP 2: Terms & Guidelines */}
-      {showPopup && selectedBook && showTerms && studentInfo && (
+      {showPopup && selectedBook && currentStep === 2 && studentInfo && (
+        <OTPModal
+          studentId={studentId}
+          studentInfo={studentInfo}
+          bookTitle={selectedBook.title}
+          onVerified={handleOTPVerified}
+          onCancel={handleClosePopup}
+          onBack={handleBackFromOTP}
+        />
+      )}
+
+      {showPopup && selectedBook && currentStep === 3 && studentInfo && (
         <div className="student-popup" onClick={handleClosePopup}>
           <div className="student-popup-content terms-popup" onClick={(e) => e.stopPropagation()}>
             <button className="close-btn" onClick={handleClosePopup}>×</button>
@@ -593,7 +624,6 @@ export default function StudentBooks() {
                     <p style={{ fontSize: '13px', color: '#6b7280' }}>ID: {studentId}</p>
                   </div>
                 </div>
-                {/* 🆕 Show status badge */}
                 <div className="terms-detail-item">
                   <span className="terms-icon">✓</span>
                   <div>
@@ -609,7 +639,7 @@ export default function StudentBooks() {
                         color: '#065f46',
                         textTransform: 'uppercase'
                       }}>
-                        Active
+                        ✅ Verified
                       </span>
                     </p>
                   </div>
@@ -663,7 +693,7 @@ export default function StudentBooks() {
                   <span className="guideline-icon">📱</span>
                   <div>
                     <strong>Notifications:</strong>
-                    <p>You'll receive SMS reminders about </p>
+                    <p>You'll receive SMS reminders</p>
                   </div>
                 </div>
               </div>
@@ -684,7 +714,7 @@ export default function StudentBooks() {
             </div>
 
             <div className="popup-buttons">
-              <button onClick={handleBackToId} className="cancel-btn">← Back</button>
+              <button onClick={handleBackFromTerms} className="cancel-btn">← Back</button>
               <button 
                 onClick={handleBorrowConfirm} 
                 className={`confirm-btn ${!agreedToTerms ? 'disabled' : ''}`}
@@ -699,6 +729,61 @@ export default function StudentBooks() {
 
       {viewingBook && (
         <BookDetailsModal book={viewingBook} onClose={handleClosePreview} onBorrow={handleBorrowClick} />
+      )}
+
+      {/* 🆕 Borrowed Books ID Input Modal */}
+      {showBorrowedBooksIdModal && (
+        <div className="student-popup" onClick={handleCloseBorrowedBooksIdModal}>
+          <div className="student-popup-content" onClick={(e) => e.stopPropagation()}>
+            <button className="close-btn" onClick={handleCloseBorrowedBooksIdModal}>×</button>
+
+            <div className="popup-header">
+              <img src={bclogo} alt="School Logo" className="popup-icon" />
+              <h2>View Borrowed Books</h2>
+            </div>
+
+            <div className="popup-book-info">
+              <p className="popup-label">Enter your Student ID to view your borrowed books history</p>
+            </div>
+
+            <div className="input-group">
+              <label htmlFor="borrowedBooksStudentId">STUDENT ID</label>
+              <input
+                id="borrowedBooksStudentId"
+                type="text"
+                value={borrowedBooksStudentId}
+                onChange={(e) => setBorrowedBooksStudentId(e.target.value)}
+                className="student-id-input"
+                autoFocus
+                disabled={checkingStudent}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !checkingStudent) {
+                    handleViewBorrowedBooks();
+                  }
+                }}
+              />
+            </div>
+
+            <div className="popup-buttons">
+              <button 
+                onClick={handleViewBorrowedBooks} 
+                className="confirm-btn"
+                disabled={checkingStudent}
+              >
+                {checkingStudent ? 'Checking...' : 'View Books →'}
+              </button>
+              <button onClick={handleCloseBorrowedBooksIdModal} className="cancel-btn">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🆕 Borrowed Books Modal */}
+      {showBorrowedBooksModal && (
+        <StudentBorrowedBooksModal 
+          studentId={borrowedBooksStudentId}
+          onClose={handleCloseBorrowedBooksModal}
+        />
       )}
     </div>
   );

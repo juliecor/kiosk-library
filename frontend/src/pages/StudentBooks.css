@@ -660,6 +660,72 @@
   background: rgba(148, 163, 184, 0.9);
 }
 
+
+/* 🆕 Updated Header Styles */
+.student-books-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.student-books-title {
+  color: white;
+  font-size: 28px;
+  font-weight: bold;
+  margin: 0;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* 🆕 Updated Button Styles */
+.view-borrowed-books-btn {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+  white-space: nowrap;
+}
+
+.view-borrowed-books-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
+  background: linear-gradient(135deg, #059669, #047857);
+}
+
+.btn-icon {
+  font-size: 18px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .student-books-header {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+  
+  .student-books-title {
+    font-size: 24px;
+  }
+  
+  .view-borrowed-books-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
 /* Mobile responsive for terms modal */
 @media (max-width: 768px) {
   .terms-popup {
